@@ -3,199 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Uses the connection pool
+  directUrl = env("DIRECT_URL") // Uses the direct connection for migrations
 }
 
-/* =======================
-   MODELS
-======================= */
-
-model User {
-  id           Int       @id @default(autoincrement())
-  name         String    @db.VarChar(100)
-  email        String    @unique @db.VarChar(150)
-  phone        String?   @db.VarChar(20)
-  passwordHash String    @db.Text
-
-  skills       String[]
-
-  linkedin     String?   @db.VarChar(255)
-  github       String?   @db.VarChar(255)
-  profession   String?   @db.VarChar(100)
-
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  createdEvents     Event[]            @relation("CreatedEvents")
-  eventUserRoles    EventUserRole[]
-  registrations     Registration[]
-  teamsLed          Team[]             @relation("TeamLeader")
-  teamMemberships   TeamMember[]
-  submissions       Submission[]
-  mentorAssignments MentorAssignment[]
-}
-
-model Event {
-  id               Int       @id @default(autoincrement())
-  title            String    @db.VarChar(150)
-  description      String    @db.Text
-
-  type             EventType
-  mode             EventMode
-
-  bannerUrl        String?   @db.VarChar(255)
-  logoUrl          String?   @db.VarChar(255)
-
-  startDate        DateTime
-  endDate          DateTime
-
-  registrationType RegistrationType
-  registrationFee  Decimal   @db.Decimal(10, 2)
-
-  maxTeamSize      Int?
-  minTeamSize      Int?
-
-  rewards          Json?
-
-  createdById      Int
-  createdBy        User      @relation("CreatedEvents", fields: [createdById], references: [id])
-
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  roles             EventUserRole[]
-  registrations     Registration[]
-  teams             Team[]
-  announcements     EventAnnouncement[]
-  submissions       Submission[]
-  mentorAssignments MentorAssignment[]
-}
-
-model Role {
-  id   Int    @id @default(autoincrement())
-  name String @unique @db.VarChar(50)
-
-  eventUserRoles EventUserRole[]
-}
-
-model EventUserRole {
-  id         Int      @id @default(autoincrement())
-  assignedAt DateTime @default(now())
-
-  eventId Int
-  userId  Int
-  roleId  Int
-
-  event Event @relation(fields: [eventId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
-  role  Role  @relation(fields: [roleId], references: [id])
-
-  @@unique([eventId, userId, roleId])
-}
-
-model Registration {
-  id        Int      @id @default(autoincrement())
-  status    RegistrationStatus
-  createdAt DateTime @default(now())
-
-  eventId Int
-  userId  Int
-  teamId  Int?
-
-  event Event @relation(fields: [eventId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
-  team  Team? @relation(fields: [teamId], references: [id])
-
-  payment Payment?
-
-  @@unique([eventId, userId])
-}
-
-model Payment {
-  id             Int      @id @default(autoincrement())
-
-  amount         Decimal  @db.Decimal(10, 2)
-  currency       String   @db.Char(3)
-
-  provider       PaymentProvider
-  status         PaymentStatus
-
-  transactionRef String   @unique @db.VarChar(100)
-  createdAt      DateTime @default(now())
-
-  registrationId Int   @unique
-  registration   Registration @relation(fields: [registrationId], references: [id])
-}
-
-model Team {
-  id        Int      @id @default(autoincrement())
-  name      String   @db.VarChar(100)
-  status    TeamStatus
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  eventId  Int
-  leaderId Int
-
-  event   Event @relation(fields: [eventId], references: [id])
-  leader  User  @relation("TeamLeader", fields: [leaderId], references: [id])
-
-  members           TeamMember[]
-  registrations     Registration[]
-  submissions       Submission[]
-  mentorAssignments MentorAssignment[]
-}
-
-model TeamMember {
-  teamId Int
-  userId Int
-
-  team Team @relation(fields: [teamId], references: [id])
-  user User @relation(fields: [userId], references: [id])
-
-  @@id([teamId, userId])
-}
-
-model Submission {
-  id          Int      @id @default(autoincrement())
-  title       String   @db.VarChar(150)
-  repoUrl     String?  @db.VarChar(255)
-  submittedAt DateTime @default(now())
-
-  eventId Int
-  teamId  Int
-  userId  Int
-
-  event Event @relation(fields: [eventId], references: [id])
-  team  Team  @relation(fields: [teamId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
-}
-
-model MentorAssignment {
-  eventId  Int
-  mentorId Int
-  teamId   Int
-
-  event  Event @relation(fields: [eventId], references: [id])
-  mentor User  @relation(fields: [mentorId], references: [id])
-  team   Team  @relation(fields: [teamId], references: [id])
-
-  @@id([eventId, mentorId, teamId])
-}
-
-model EventAnnouncement {
-  id        Int      @id @default(autoincrement())
-  message   String   @db.Text
-  createdAt DateTime @default(now())
-
-  eventId Int
-  event   Event @relation(fields: [eventId], references: [id])
-}
-
-/* =======================
-   ENUMS
-======================= */
+// --- Enums ---
 
 enum EventType {
   hackathon
@@ -207,12 +20,6 @@ enum EventMode {
   online
   offline
   hybrid
-}
-
-enum RegistrationType {
-  individual
-  team
-  invite_only
 }
 
 enum RegistrationStatus {
@@ -227,15 +34,213 @@ enum PaymentStatus {
   failed
 }
 
-enum PaymentProvider {
-  stripe
-  razorpay
-  paypal
-}
-
 enum TeamStatus {
   draft
   active
   locked
   disqualified
+}
+
+// --- Models ---
+
+model User {
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  phone         String? // 'number' is usually best stored as String to preserve formatting/leading zeros
+  password_hash String
+  skills        String[] // Array type
+  linkedin      String?
+  github        String?
+  profession    String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Relationships
+  events_created     Event[]            @relation("CreatedEvents")
+  event_roles        EventUserRole[]
+  registrations      Registration[]
+  teams_led          Team[]             @relation("TeamLeader")
+  team_memberships   TeamMember[]
+  submissions        Submission[]
+  mentor_assignments MentorAssignment[]
+
+  @@map("users")
+}
+
+model EmailOTP {
+  id         Int      @id @default(autoincrement())
+  email      String
+  otp_hash   String
+  expires_at DateTime
+  used       Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  @@index([email])
+  @@map("email_otps")
+}
+
+
+model Event {
+  id                Int       @id @default(autoincrement())
+  title             String    @db.VarChar(150)
+  description       String
+  type              EventType
+  mode              EventMode
+  banner_url        String?
+  logo_url          String?
+  start_date        DateTime
+  end_date          DateTime
+  registration_type String
+  registration_fee  Decimal // 'number' for money is best as Decimal
+  max_team_size     Int
+  min_team_size     Int
+  rewards           Json // 'jsonb'
+  created_by        Int
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  // Relationships
+  creator            User                @relation("CreatedEvents", fields: [created_by], references: [id])
+  user_roles         EventUserRole[]
+  registrations      Registration[]
+  teams              Team[]
+  submissions        Submission[]
+  mentor_assignments MentorAssignment[]
+  announcements      EventAnnouncement[]
+
+  @@map("events")
+}
+
+model Role {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(50)
+
+  // Relationships
+  event_user_roles EventUserRole[]
+
+  @@map("roles")
+}
+
+model EventUserRole {
+  id          Int      @id @default(autoincrement())
+  event_id    Int
+  user_id     Int
+  role_id     Int
+  assigned_at DateTime @default(now())
+
+  // Relationships
+  event Event @relation(fields: [event_id], references: [id])
+  user  User  @relation(fields: [user_id], references: [id])
+  role  Role  @relation(fields: [role_id], references: [id])
+
+  @@map("event_user_roles")
+}
+
+model Registration {
+  id         Int                @id @default(autoincrement())
+  event_id   Int
+  user_id    Int
+  team_id    Int? // Optional, only for hackathons
+  status     RegistrationStatus
+  created_at DateTime           @default(now())
+
+  // Relationships
+  event    Event     @relation(fields: [event_id], references: [id])
+  user     User      @relation(fields: [user_id], references: [id])
+  team     Team?     @relation(fields: [team_id], references: [id])
+  payments Payment[]
+
+  @@map("registrations")
+}
+
+model Payment {
+  id              Int           @id @default(autoincrement())
+  registration_id Int
+  amount          Decimal
+  currency        String
+  provider        String
+  status          PaymentStatus
+  transaction_ref String?       @db.VarChar(100)
+  created_at      DateTime      @default(now())
+
+  // Relationships
+  registration Registration @relation(fields: [registration_id], references: [id])
+
+  @@map("payments")
+}
+
+model Team {
+  id         Int        @id @default(autoincrement())
+  name       String
+  event_id   Int
+  leader_id  Int
+  status     TeamStatus
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+
+  // Relationships
+  event              Event              @relation(fields: [event_id], references: [id])
+  leader             User               @relation("TeamLeader", fields: [leader_id], references: [id])
+  registrations      Registration[]
+  members            TeamMember[]
+  submissions        Submission[]
+  mentor_assignments MentorAssignment[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  team_id Int
+  user_id Int
+
+  // Relationships
+  team Team @relation(fields: [team_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@id([team_id, user_id]) // Composite Primary Key
+  @@map("team_members")
+}
+
+model Submission {
+  id           Int      @id @default(autoincrement())
+  event_id     Int
+  team_id      Int
+  user_id      Int
+  title        String   @db.VarChar(150)
+  repo_url     String?
+  submitted_at DateTime @default(now())
+
+  // Relationships
+  event Event @relation(fields: [event_id], references: [id])
+  team  Team  @relation(fields: [team_id], references: [id])
+  user  User  @relation(fields: [user_id], references: [id])
+
+  @@map("submissions")
+}
+
+model MentorAssignment {
+  event_id  Int
+  mentor_id Int
+  team_id   Int
+
+  // Relationships
+  event  Event @relation(fields: [event_id], references: [id])
+  mentor User  @relation(fields: [mentor_id], references: [id])
+  team   Team  @relation(fields: [team_id], references: [id])
+
+  @@id([event_id, mentor_id, team_id]) // Composite PK
+  @@map("mentor_assignments")
+}
+
+model EventAnnouncement {
+  id         Int      @id @default(autoincrement())
+  event_id   Int
+  message    String
+  created_at DateTime @default(now())
+
+  // Relationships
+  event Event @relation(fields: [event_id], references: [id])
+
+  @@map("event_announcements")
 }
