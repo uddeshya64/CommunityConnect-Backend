@@ -44,42 +44,30 @@ enum TeamStatus {
 // --- Models ---
 
 model User {
-  id            Int      @id @default(autoincrement())
-  name          String
-  email         String   @unique
-  phone         String? // 'number' is usually best stored as String to preserve formatting/leading zeros
-  password_hash String
-  skills        String[] // Array type
-  linkedin      String?
-  github        String?
-  profession    String?
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  id          String     @id @default(uuid()) @db.Uuid
+  fullName    String
+  email       String     @unique
+  phone       String?    @unique
+  password    String     // Hashed
+  affiliation String?
+  profileUrl  String?
+  skills      Json?      @default("[]") // PostgreSQL JSONB
+  
+  // Platform Level Role
+  globalRole  GlobalRole @default(USER)
 
-  // Relationships
-  events_created     Event[]            @relation("CreatedEvents")
-  event_roles        EventUserRole[]
-  registrations      Registration[]
-  teams_led          Team[]             @relation("TeamLeader")
-  team_memberships   TeamMember[]
-  submissions        Submission[]
-  mentor_assignments MentorAssignment[]
+  // Relations
+  eventsOrganized Event[]        @relation("OrganizerEvents")
+  teamsLed        Team[]         @relation("TeamLeader")
+  registrations   Registration[]
+  volunteering    Volunteer[]    @relation("VolunteerUser")
+  assignedIssues  EventIssue[]   @relation("AssignedVolunteer")
+  raisedIssues    EventIssue[]   @relation("IssueRaiser")
+  mentoring       Mentor[]
 
-  @@map("users")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
-
-model EmailOTP {
-  id         Int      @id @default(autoincrement())
-  email      String
-  otp_hash   String
-  expires_at DateTime
-  used       Boolean  @default(false)
-  created_at DateTime @default(now())
-
-  @@index([email])
-  @@map("email_otps")
-}
-
 
 model Event {
   id                Int       @id @default(autoincrement())
@@ -233,14 +221,14 @@ model MentorAssignment {
   @@map("mentor_assignments")
 }
 
-model EventAnnouncement {
-  id         Int      @id @default(autoincrement())
-  event_id   Int
-  message    String
-  created_at DateTime @default(now())
-
-  // Relationships
-  event Event @relation(fields: [event_id], references: [id])
-
-  @@map("event_announcements")
+model Mentor {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  eventId       String   @db.Uuid
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  skill         String
+  assignedTeams Json?    @default("[]") // Array of Team IDs
 }
