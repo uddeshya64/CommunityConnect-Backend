@@ -44,29 +44,28 @@ enum TeamStatus {
 // --- Models ---
 
 model User {
-  id          String     @id @default(uuid()) @db.Uuid
-  fullName    String
-  email       String     @unique
-  phone       String?    @unique
-  password    String     // Hashed
-  affiliation String?
-  profileUrl  String?
-  skills      Json?      @default("[]") // PostgreSQL JSONB
-  
-  // Platform Level Role
-  globalRole  GlobalRole @default(USER)
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  phone         String? // 'number' is usually best stored as String to preserve formatting/leading zeros
+  password_hash String
+  skills        String[] // Array type
+  linkedin      String?
+  github        String?
+  profession    String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
 
-  // Relations
-  eventsOrganized Event[]        @relation("OrganizerEvents")
-  teamsLed        Team[]         @relation("TeamLeader")
-  registrations   Registration[]
-  volunteering    Volunteer[]    @relation("VolunteerUser")
-  assignedIssues  EventIssue[]   @relation("AssignedVolunteer")
-  raisedIssues    EventIssue[]   @relation("IssueRaiser")
-  mentoring       Mentor[]
+  // Relationships
+  events_created     Event[]            @relation("CreatedEvents")
+  event_roles        EventUserRole[]
+  registrations      Registration[]
+  teams_led          Team[]             @relation("TeamLeader")
+  team_memberships   TeamMember[]
+  submissions        Submission[]
+  mentor_assignments MentorAssignment[]
 
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  @@map("users")
 }
 
 model Event {
@@ -221,14 +220,14 @@ model MentorAssignment {
   @@map("mentor_assignments")
 }
 
-model Mentor {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @db.Uuid
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  eventId       String   @db.Uuid
-  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
-  skill         String
-  assignedTeams Json?    @default("[]") // Array of Team IDs
+model EventAnnouncement {
+  id         Int      @id @default(autoincrement())
+  event_id   Int
+  message    String
+  created_at DateTime @default(now())
+
+  // Relationships
+  event Event @relation(fields: [event_id], references: [id])
+
+  @@map("event_announcements")
 }

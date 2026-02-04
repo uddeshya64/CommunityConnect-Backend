@@ -6,10 +6,13 @@ const router = Router();
 
 // --- Email OTP Routes ---
 // POST /api/auth/email/init -> Send OTP
-router.post('/email/init', authLimiter, AuthController.initiateEmailReg);
+router.post('/registor/init', authLimiter, AuthController.initiateEmailReg);
 
 // POST /api/auth/email/verify -> Verify & Register/Login
-router.post('/email/verify', authLimiter, AuthController.verifyEmailReg);
+router.post('/registor/verify', authLimiter, AuthController.verifyEmailReg);
+
+// POST /api/auth/login -> Email/Password Login
+router.post('/login', authLimiter, AuthController.login);
 
 // --- Google Auth Route ---
 // POST /api/auth/google -> Secure Google Login

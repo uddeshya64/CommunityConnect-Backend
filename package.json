@@ -2,12 +2,11 @@
   "name": "communityconnect",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
-  "type": "module",
+  "main": "server.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
-    "start": "node dist/index.ts"
+    "start": "node dist/server.ts"
   },
   "keywords": [],
   "author": "",

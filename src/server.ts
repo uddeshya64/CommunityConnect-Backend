@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 
 // Import Routes
-import authRoutes from './routes/auth.routes';
+import authRoutes from './routes/auth.routes.ts';
 
 // Initialize App
 const app = express();
