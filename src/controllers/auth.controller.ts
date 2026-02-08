@@ -1,21 +1,23 @@
 import { Request, Response } from "express";
 import { AuthService } from "../services/auth.service";
 import {
-  EmailRegisterSchema,
+  // EmailRegisterSchema,
   VerifyEmailOtpSchema,
-  GoogleAuthSchema,
+  // GoogleAuthSchema,
+  SendOtpSchema,
+  ResetPasswordSchema
 } from "../validation/auth.validation";
 
 export const AuthController = {
   // Endpoint: POST /api/auth/email/init
   async initiateEmailReg(req: Request, res: Response) {
     try {
-      const { email, password } = req.body;
+      const { email, password, context } = SendOtpSchema.parse(req.body);
       if (!email || !password) {
         return res.status(400).json({ error: "Email and password required" });
       }
-
-      await AuthService.initiateEmailAuth(email, password);
+    // Default to REGISTER if context is missing,
+      await AuthService.sendOtp(email, password, context || "REGISTER");
       res.json({ success: true, message: "Verification code sent to email" });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -31,13 +33,27 @@ export const AuthController = {
       // Default name if not provided during login flow
       const name = validatedData.name || "User";
 
-      const token = await AuthService.verifyEmailAndRegister({
-        email: validatedData.email,
-        name: name,
-        otp: validatedData.otp,
-      });
+      const token = await AuthService.verifyOtp(
+        name,
+        validatedData.email,
+        validatedData.otp,
+        validatedData.context
+      );
 
-      res.status(201).json({ success: true, token });
+      res.status(201).json({ success: true, token, message: "verified" });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // Endpoint: POST /api/auth/reset-password
+  async resetPassword(req: Request, res: Response) {
+    try {
+      const { token, newPassword } = ResetPasswordSchema.parse(req.body);
+      
+      await AuthService.resetPassword(token, newPassword);
+      
+      res.json({ success: true, message: "Password updated. Please login." });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

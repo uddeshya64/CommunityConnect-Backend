@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
-import { authLimiter } from '../middlewares/security'; // The rate limiter we made earlier
+import { authLimiter } from '../middlewares/security'; 
 
 const router = Router();
 
-// --- Email OTP Routes ---
 // POST /api/auth/email/init -> Send OTP
 router.post('/registor/init', authLimiter, AuthController.initiateEmailReg);
 
@@ -12,7 +11,10 @@ router.post('/registor/init', authLimiter, AuthController.initiateEmailReg);
 router.post('/registor/verify', authLimiter, AuthController.verifyEmailReg);
 
 // POST /api/auth/login -> Email/Password Login
-router.post('/login', authLimiter, AuthController.login);
+router.post('/login', authLimiter, AuthController.login);   
+
+// 3. Final Step for Forgot Password
+router.post('/reset-password',authLimiter, AuthController.resetPassword);
 
 // --- Google Auth Route ---
 // POST /api/auth/google -> Secure Google Login
