@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 
 // Import Routes
 import authRoutes from './routes/auth.routes';
+import profileRoutes from './routes/profile.routes'
 
 // Initialize App
 const app = express();
@@ -51,6 +52,7 @@ app.get('/health', (req, res) => {
 // Mount Auth Routes
 app.use('/api/auth', authRoutes);
 
+app.use('/api/profile', profileRoutes);
 // =========================================
 // 3. GLOBAL ERROR HANDLER
 // =========================================

@@ -27,26 +27,30 @@ const transporter = nodemailer.createTransport({
 export class AuthService {
 
 // --- 1. UNIFIED SEND OTP ---
-  static async sendOtp(email: string, password : string, context: 'REGISTER' | 'RESET') {
+  static async sendOtp(email: string, password?: string, context: 'REGISTER' | 'RESET' = 'REGISTER') {
     const user = await prisma.user.findUnique({ where: { email } });
 
     // SECURITY CHECK: Context Isolation
-    if (context === 'REGISTER' && user) {
-      throw new Error("User already exists. Please login.");
+    if (context === 'REGISTER') {
+      if (user) throw new Error("User already exists. Please login.");
+      // For registration, password MUST be provided
+      if (!password) throw new Error("Password is required for registration.");
     }
+    
     if (context === 'RESET' && !user) {
       // Fake success to prevent Email Enumeration
-      return; 
+      return { message: "OTP sent to email successfully" }; 
     }
 
     // Generate & Store
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const hash = await bcrypt.hash(otp, 10);
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Only hash the password if it exists (Registration path)
+    const passwordHash = password ? await bcrypt.hash(password, 10) : undefined;
     otpStore[email] = {
       hash,
-      passwordHash:hashedPassword,
+      passwordHash,
       context, // <--- CRITICAL: Locks the OTP to this specific action
       expires: Date.now() + 10 * 60 * 1000 // 10 mins
     };
