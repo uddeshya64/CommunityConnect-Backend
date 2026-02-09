@@ -11,19 +11,37 @@ import {
 export const AuthController = {
   // Endpoint: POST /api/auth/email/init
   async initiateEmailReg(req: Request, res: Response) {
-    try {
-      const { email, password, context } = SendOtpSchema.parse(req.body);
-      if (!email || !password) {
-        return res.status(400).json({ error: "Email and password required" });
-      }
-    // Default to REGISTER if context is missing,
-      await AuthService.sendOtp(email, password, context || "REGISTER");
-      res.json({ success: true, message: "Verification code sent to email" });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  },
+      try {
+        // 1. Parse the body using your Zod Schema
+        const { email, password, context = "REGISTER" } = SendOtpSchema.parse(req.body);
 
+        // 2. Logic Check: If registering, password MUST be present
+        if (context === "REGISTER" && !password) {
+          return res.status(400).json({ 
+            success: false, 
+            error: "Password is required for registration" 
+          });
+        }
+
+        // 3. Call the Service
+        // Password will be passed as undefined if it's a RESET, which is fine now!
+        await AuthService.sendOtp(email, password, context);
+
+        return res.status(200).json({ 
+          success: true, 
+          message: "Verification code sent to email" 
+        });
+
+      } catch (error: any) {
+        // If Zod validation fails, it throws an error that ends up here
+        const statusCode = error.name === 'ZodError' ? 400 : 500;
+        
+        return res.status(statusCode).json({ 
+          success: false, 
+          error: error.message 
+        });
+      }
+    },
   // Endpoint: POST /api/auth/email/verify
   async verifyEmailReg(req: Request, res: Response) {
     try {

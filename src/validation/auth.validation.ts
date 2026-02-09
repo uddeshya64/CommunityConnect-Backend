@@ -14,15 +14,21 @@ export const VerifyEmailOtpSchema = z.object({
   context: z.enum(['REGISTER', 'RESET']),
 });
 
-// 1. Schema for Requesting OTP (Used for both Register & Forgot Pass)
 export const SendOtpSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string()
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Invalid email address"),
+    
+  // Made optional so RESET doesn't require it
+  password: z
+    .string()
     .min(8, "Password must be 8+ chars")
-    // .regex(/[A-Z]/, "Needs uppercase")
-    // .regex(/[0-9]/, "Needs number")
-    // .regex(/[^A-Za-z0-9]/, "Needs special char"),
-  ,context: z.enum(['REGISTER', 'RESET']).optional() // Optional because we might infer it from the URL
+    // Note: Constraints only run if password is provided
+    .optional(), 
+
+  context: z.enum(['REGISTER', 'RESET']).optional()
 });
 
 // 2. Schema for Verifying OTP
