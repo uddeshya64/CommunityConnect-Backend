@@ -1,54 +1,54 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { randomBytes } from "crypto";
 
+if (!process.env.JWT_SECRET || !process.env.RESET_TOKEN_SECRET) {
+  console.error("❌ FATAL ERROR: JWT_SECRET or RESET_SECRET is missing in .env");
+  process.exit(1); 
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET;
+
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || "super_secret_key";
+const otpStore: Record<string, any> = {}; // Use Redis in production
 
 // --- EMAIL TRANSPORTER SETUP ---
-// For dev: Use Ethereal.email or your personal Gmail with App Password
 const transporter = nodemailer.createTransport({
   service: "gmail", // Or 'SES', 'SendGrid'
   auth: {
-    user: process.env.EMAIL_USER, // e.g., 'yourproject@gmail.com'
-    pass: process.env.EMAIL_PASS, // App Password, not real password
+    user: process.env.EMAIL_USER, // 
+    pass: process.env.EMAIL_PASS, // 
   },
 });
 
-// In-memory OTP store (Replace with Redis in Prod)
-const otpStore: Record<
-  string,
-  {
-    otpHash: string;
-    passwordHash: string;
-    expires: number;
-  }
-> = {};
-
 export class AuthService {
-  // --- EMAIL OTP LOGIC ---
 
-  static async initiateEmailAuth(email: string, password: string) {
-    // 1. Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
+// --- 1. UNIFIED SEND OTP ---
+  static async sendOtp(email: string, password : string, context: 'REGISTER' | 'RESET') {
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    // SECURITY CHECK: Context Isolation
+    if (context === 'REGISTER' && user) {
       throw new Error("User already exists. Please login.");
     }
+    if (context === 'RESET' && !user) {
+      // Fake success to prevent Email Enumeration
+      return; 
+    }
 
-    // 2. Hash Password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 3. Generate 6-digit OTP
+    // Generate & Store
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpHash = await bcrypt.hash(otp, 10);
+    const hash = await bcrypt.hash(otp, 10);
 
-    // 4. Store with 10-minute expiry (Email delivery can be slower than SMS)
+    const hashedPassword = await bcrypt.hash(password, 10);
     otpStore[email] = {
-      otpHash: otpHash,
-      passwordHash: hashedPassword,
-      expires: Date.now() + 10 * 60 * 1000,
+      hash,
+      passwordHash:hashedPassword,
+      context, // <--- CRITICAL: Locks the OTP to this specific action
+      expires: Date.now() + 10 * 60 * 1000 // 10 mins
     };
 
     // 5. Send Email
@@ -69,37 +69,66 @@ export class AuthService {
     return { message: "OTP sent to email successfully" };
   }
 
-  static async verifyEmailAndRegister(data: {
-    email: string;
-    name: string;
-    otp: string;
-  }) {
-    const { email, name, otp } = data;
+  // --- 2. UNIFIED VERIFY OTP ---
+  static async verifyOtp( 
+    name : string,
+    email: string,
+    otp: string,
+    context: 'REGISTER' | 'RESET'
+  ) {
+    const data = otpStore[email];
 
-    // 1. Check OTP Validity
-    const storedOtp = otpStore[email];
-    if (!storedOtp || storedOtp.expires < Date.now()) {
-      throw new Error("OTP expired or not found");
-    }
-
-    const isValid = await bcrypt.compare(otp, storedOtp.otpHash);
+    // Validations
+    if (!data) throw new Error("OTP expired or invalid");
+    if (data.context !== context) throw new Error("Invalid OTP context"); // Prevents hacking
+    
+    const isValid = await bcrypt.compare(otp, data.hash);
     if (!isValid) throw new Error("Invalid OTP");
 
-    // 2. Create User if they don't exist
-    user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password_hash: storedOtp.passwordHash,
-        created_at: new Date(),
-      },
+    // ISSUE TOKEN BASED ON CONTEXT
+    if (context === 'RESET') {
+      return jwt.sign({ id: email, purpose: 'reset_pass' }, process.env.RESET_TOKEN_SECRET!, { expiresIn: '5m' });
+
+    }else {
+      // Create User if they don't exist
+        const user = await prisma.user.create({
+          data: {
+            name,
+            email,
+            password_hash: data.passwordHash,
+            created_at: new Date(),
+          },
+        });
+
+        delete otpStore[email]; // Clear it
+
+        return jwt.sign(
+        { id: user.id, email: user.email, purpose: 'email_verified' }, 
+        process.env.JWT_SECRET!, 
+        { expiresIn: '15m' }
+        );
+    }
+    
+  }
+
+  // --- 3. RESET PASSWORD ACTION ---
+  static async resetPassword(token: string, newPass: string) {
+    // Verify Token
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, process.env.RESET_TOKEN_SECRET!);
+    } catch {
+      throw new Error("Invalid or expired token");
+    }
+
+    if (decoded.purpose !== 'reset_pass') throw new Error("Invalid token type");
+
+    // Update DB
+    const hash = await bcrypt.hash(newPass, 10);
+    await prisma.user.update({
+      where: { email: decoded.id },
+      data: { password_hash: hash }
     });
-
-    // 3. Clear OTP
-    delete otpStore[email];
-
-    // 4. Generate JWT
-    return this.generateToken(user.id);
   }
 
   // --- LOGIN LOGIC ---
@@ -120,6 +149,8 @@ export class AuthService {
     return this.generateToken(user.id);
   }
 
+  
+  
   // --- GOOGLE LOGIC (Unchanged) ---
   static async loginWithGoogle(googleProfile: { email: string; name: string }) {
     let user = await prisma.user.findUnique({

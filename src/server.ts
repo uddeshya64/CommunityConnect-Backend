@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 
 // Import Routes
-import authRoutes from './routes/auth.routes.ts';
+import authRoutes from './routes/auth.routes';
 
 // Initialize App
 const app = express();
@@ -79,8 +79,8 @@ const startServer = async () => {
     console.log('✅ Database connected successfully');
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log(`🛡️  Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🚀Server running on http://localhost:${PORT}`);
+      console.log(`🛡️ Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 
   } catch (error) {
