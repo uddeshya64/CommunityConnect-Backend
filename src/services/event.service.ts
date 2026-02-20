@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 export class EventService {
   
-  // 1. CREATE EVENT
+  // 1. POST EVENT
   static async createEvent(userId: number, data: any) {
     return prisma.event.create({
       data: {

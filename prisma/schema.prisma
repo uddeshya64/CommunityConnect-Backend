@@ -159,6 +159,22 @@ model Payment {
   @@map("payments")
 }
 
+// THIS MODEL: To track pending email invites
+model TeamInvite {
+  id         Int      @id @default(autoincrement())
+  team_id    Int
+  email      String   // The email of the person being invited
+  token      String   @unique // A secure random string for the Magic Link
+  status     String   @default("pending") // pending, accepted, expired
+  created_at DateTime @default(now())
+  expires_at DateTime
+
+  team       Team     @relation(fields: [team_id], references: [id])
+
+  @@unique([team_id, email]) // Prevent spamming the same email for the same team
+  @@map("team_invites")
+}
+
 model Team {
   id         Int        @id @default(autoincrement())
   name       String
@@ -175,6 +191,7 @@ model Team {
   members            TeamMember[]
   submissions        Submission[]
   mentor_assignments MentorAssignment[]
+  invites TeamInvite[]
 
   @@map("teams")
 }

@@ -22,6 +22,24 @@ export const ProfileController = {
     }
   },
 
+  // GET /api/profile/:id
+  // (NEW: Allows any authenticated user to see any other profile)
+  async getProfileById(req: Request, res: Response) {
+    try {
+      // Get the ID from the URL params instead of the token
+      const targetUserId = Number(req.params.id);
+      
+      if (isNaN(targetUserId)) {
+        return res.status(400).json({ error: "Invalid User ID format" });
+      }
+
+      const profile = await ProfileService.getProfile(targetUserId);
+      res.json({ success: true, data: profile });
+    } catch (error: any) {
+      res.status(404).json({ error: "Profile not found" });
+    }
+  },
+
   // PATCH /api/profile
   async updateMyProfile(req: Request, res: Response) {
     try {

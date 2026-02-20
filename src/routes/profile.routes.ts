@@ -10,9 +10,11 @@ const router = Router();
 router.use(authenticate);
 
 // GET /api/profile
-router.get('/',ProfileController.getMyProfile);
+router.get('/me', authenticate, ProfileController.getMyProfile);
+
+router.get('/:id', authenticate, ProfileController.getProfileById);
 
 // PATCH /api/profile
-router.patch('/',authLimiter, ProfileController.updateMyProfile);
+router.patch('/', authenticate, authLimiter, ProfileController.updateMyProfile);
 
 export default router;

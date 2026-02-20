@@ -15,7 +15,7 @@ export const EventController = {
       res.json({ success: true, data: result });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
-    }
+    } 
   },
 
   // GET /api/events/:id
