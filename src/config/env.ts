@@ -1,4 +1,3 @@
-// File: src/config/env.ts
 import 'dotenv/config'; // Loads the .env file
 import { z } from 'zod';
 

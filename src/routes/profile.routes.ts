@@ -9,10 +9,12 @@ const router = Router();
 // This ensures req.user.id exists
 router.use(authenticate);
 
-// 1. Fetch current user's profile
-router.get('/', ProfileController.getMyProfile);
+// GET /api/profile
+router.get('/me', authenticate, ProfileController.getMyProfile);
 
-// 2. Update current user's profile
-router.patch('/', ProfileController.updateMyProfile);
+router.get('/:id', authenticate, ProfileController.getProfileById);
+
+// PATCH /api/profile
+router.patch('/', authenticate, authLimiter, ProfileController.updateMyProfile);
 
 export default router;

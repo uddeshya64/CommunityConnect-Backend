@@ -1,0 +1,20 @@
+import { Router } from 'express';
+import { EventController } from '../controllers/event.controller';
+import { authenticate } from '../middlewares/auth.middleware';
+
+const router = Router();
+
+// Public Routes (Feed & Details)
+// Note: apply 'authenticate' optionally to 'getOne' if your middleware supports optional auth, 
+// OR just handle the "no token" case in middleware to not crash but leave req.user undefined.
+router.get('/', EventController.getFeed);
+router.get('/:id', authenticate, EventController.getOne); 
+// ^ If you want guest users to view events, ensure your 'authenticate' middleware 
+// doesn't block requests without tokens, or create a specific 'optionalAuth' middleware.
+
+// Protected Routes (Create, Update, Delete)
+router.post('/', authenticate, EventController.create);
+router.patch('/:id', authenticate, EventController.update);
+router.delete('/:id', authenticate, EventController.delete);
+
+export default router;

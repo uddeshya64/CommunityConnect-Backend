@@ -19,10 +19,9 @@ export class ProfileService {
         github: true,
         profession: true,
         created_at: true,
-        // We can also fetch related data, e.g., teams they lead
-        teams_led: {
-          select: { id: true, name: true }
-        }
+        avatar_url:true,
+        bio: true,
+        location:true,
       }
     });
 
@@ -44,8 +43,16 @@ export class ProfileService {
         id: true,
         name: true,
         email: true,
+        phone: true,
         skills: true,
-        updated_at: true
+        linkedin: true,
+        github: true,
+        profession: true,
+        avatar_url:true,
+        bio: true,
+        location:true,
+        created_at: true,
+        updated_at: true,
       }
     });
 

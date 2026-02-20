@@ -4,13 +4,14 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { randomBytes } from "crypto";
+import { config } from '../config/env';
 
-if (!process.env.JWT_SECRET || !process.env.RESET_TOKEN_SECRET) {
+if (!config.JWT_SECRET || !config.RESET_TOKEN_SECRET) {
   console.error("❌ FATAL ERROR: JWT_SECRET or RESET_SECRET is missing in .env");
   process.exit(1); 
 }
-const JWT_SECRET = process.env.JWT_SECRET;
-const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET;
+const JWT_SECRET = config.JWT_SECRET;
+const RESET_TOKEN_SECRET = config.RESET_TOKEN_SECRET;
 
 const prisma = new PrismaClient();
 const otpStore: Record<string, any> = {}; // Use Redis in production
@@ -19,8 +20,8 @@ const otpStore: Record<string, any> = {}; // Use Redis in production
 const transporter = nodemailer.createTransport({
   service: "gmail", // Or 'SES', 'SendGrid'
   auth: {
-    user: process.env.EMAIL_USER, // 
-    pass: process.env.EMAIL_PASS, // 
+    user: config.EMAIL_USER, // 
+    pass: config.EMAIL_PASS, // 
   },
 });
 
@@ -91,7 +92,7 @@ export class AuthService {
 
     // ISSUE TOKEN BASED ON CONTEXT
     if (context === 'RESET') {
-      return jwt.sign({ id: email, purpose: 'reset_pass' }, process.env.RESET_TOKEN_SECRET!, { expiresIn: '5m' });
+      return jwt.sign({ id: email, purpose: 'reset_pass' }, config.RESET_TOKEN_SECRET!, { expiresIn: '5m' });
 
     }else {
       // Create User if they don't exist
@@ -108,7 +109,7 @@ export class AuthService {
 
         return jwt.sign(
         { id: user.id, email: user.email, purpose: 'email_verified' }, 
-        process.env.JWT_SECRET!, 
+        config.JWT_SECRET!, 
         { expiresIn: '15m' }
         );
     }
@@ -120,7 +121,7 @@ export class AuthService {
     // Verify Token
     let decoded: any;
     try {
-      decoded = jwt.verify(token, process.env.RESET_TOKEN_SECRET!);
+      decoded = jwt.verify(token, config.RESET_TOKEN_SECRET!);
     } catch {
       throw new Error("Invalid or expired token");
     }

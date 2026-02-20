@@ -12,4 +12,7 @@ export const UpdateProfileSchema = z.object({
   github: z.string().url("Invalid GitHub URL").optional().or(z.literal('')),
   
   profession: z.string().max(50).optional(),
+  avatar_url: z.string().url("Invalid profile image URL").optional().or(z.literal('')),
+  bio: z.string().max(200,"Must be under 200 characters").optional().or(z.literal('')),
+  location: z.string().optional(),
 });
