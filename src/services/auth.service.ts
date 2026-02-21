@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { randomBytes } from "crypto";
 import { config } from '../config/env';
+import { EmailService } from './email.service';
 
 if (!config.JWT_SECRET || !config.RESET_TOKEN_SECRET) {
   console.error("❌ FATAL ERROR: JWT_SECRET or RESET_SECRET is missing in .env");
@@ -56,20 +57,7 @@ export class AuthService {
       expires: Date.now() + 10 * 60 * 1000 // 10 mins
     };
 
-    // 5. Send Email
-    try {
-      await transporter.sendMail({
-        from: '"Hackathon Platform" <no-reply@hackathon.com>',
-        to: email,
-        subject: "Your Verification Code",
-        text: `Your verification code is: ${otp}. It expires in 10 minutes.`,
-        html: `<b>Your verification code is: ${otp}</b><br>It expires in 10 minutes.`,
-      });
-      console.log(`[EMAIL_SENT] To: ${email} | Code (Dev Only): ${otp}`);
-    } catch (error) {
-      console.error("Email sending failed:", error);
-      throw new Error("Failed to send email. Please try again.");
-    }
+    await EmailService.sendOtpEmail(email, otp);
 
     return { message: "OTP sent to email successfully" };
   }

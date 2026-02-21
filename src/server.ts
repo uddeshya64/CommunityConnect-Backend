@@ -9,11 +9,14 @@ import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth.routes';
 import profileRoutes from './routes/profile.routes'
 import eventRoutes from './routes/event.routes'
+import teamRoutes from './routes/team.routes'
+import teamDashboardRoutes from './routes/teamDashboard.routes';
+import { config } from './config/env';
 
 // Initialize App
 const app = express();
 const prisma = new PrismaClient();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(config.PORT) || 3000;
 
 // =========================================
 // 1. GLOBAL MIDDLEWARE (Security & Utility)
@@ -25,7 +28,7 @@ app.use(helmet());
 
 // B. CORS: Allow your React Frontend to talk to this Backend
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Vite default port
+  origin: config.FRONTEND_URL || 'http://localhost:5173', // Vite default port
   credentials: true, // Allow cookies if needed
   methods: ['GET', 'POST', 'PUT', 'DELETE']
 }));
@@ -57,6 +60,10 @@ app.use('/api/profile', profileRoutes);
 
 app.use('/api/events', eventRoutes);
 
+app.use('/api/team', teamRoutes);
+
+app.use('/api/teamDashboard',teamDashboardRoutes)
+
 // =========================================
 // 3. GLOBAL ERROR HANDLER
 // =========================================
@@ -70,8 +77,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   res.status(statusCode).json({
     success: false,
     error: message,
-    // Only show stack trace in development for debugging
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    stack: config.NODE_ENV === 'development' ? err.stack : undefined
   });
 });
 
@@ -86,7 +92,7 @@ const startServer = async () => {
 
     app.listen(PORT, () => {
       console.log(`🚀Server running on http://localhost:${PORT}`);
-      console.log(`🛡️ Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🛡️ Environment: ${config.NODE_ENV || 'development'}`);
     });
 
   } catch (error) {

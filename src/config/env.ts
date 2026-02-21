@@ -4,6 +4,7 @@ import { z } from 'zod';
 // 1. Define the Schema (The Rules)
 const envSchema = z.object({
   // Database (Prisma needs this)
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().url(),
   DIRECT_URL: z.string().url().optional(),
 
@@ -15,6 +16,11 @@ const envSchema = z.object({
   // Email Config
   EMAIL_USER: z.string().email(),
   EMAIL_PASS: z.string().min(1),
+
+  FRONTEND_URL: z.string().url("Must be a valid URL"), 
+  // RAZORPAY CONFIG
+  RAZORPAY_KEY_ID: z.string().min(1, "Razorpay Key ID is required"),
+  RAZORPAY_KEY_SECRET: z.string().min(1, "Razorpay Key Secret is required"),
   
   // App Config
   PORT: z.string().default("3000"),
