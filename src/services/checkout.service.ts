@@ -13,21 +13,25 @@ const razorpay = new Razorpay({
 
 export class CheckoutService {
   
-  // 1. INITIALIZE REGISTRATION & ORDER
+// 1. INITIALIZE REGISTRATION & ORDER
   static async initializeTeamRegistration(userId: number, eventId: number, teamName: string) {
     // A. Fetch Event to get the authoritative price
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error("Event not found");
 
-    // Industry Standard: Database Transaction to ensure no orphaned data
+    const fee = Number(event.registration_fee);
+    const isFree = fee === 0;
+
+    // Industry Standard: Database Transaction
     return prisma.$transaction(async (tx) => {
-      // B. Create the Team (Draft Status)
+      
+      // B. Create the Team (If free, instantly active. Otherwise, draft)
       const team = await tx.team.create({
         data: {
           name: teamName,
           event_id: eventId,
           leader_id: userId,
-          status: 'draft' 
+          status: isFree ? 'active' : 'draft' 
         }
       });
 
@@ -36,18 +40,40 @@ export class CheckoutService {
         data: { team_id: team.id, user_id: userId }
       });
 
-      // D. Create Pending Registration
+      // D. Create Registration (If free, instantly confirmed)
       const registration = await tx.registration.create({
         data: {
           user_id: userId,
           event_id: eventId,
           team_id: team.id,
-          status: 'pending'
+          status: isFree ? 'confirmed' : 'pending'
         }
       });
 
-      // E. Create Razorpay Order (Amount must be in Paisa)
-      const amountInPaisa = Number(event.registration_fee) * 100;
+      // ==========================================
+      // THE BYPASS: Handle Free Events
+      // ==========================================
+      if (isFree) {
+        // Create a zero-amount payment record for database consistency
+        await tx.payment.create({
+          data: {
+            registration_id: registration.id,
+            amount: 0,
+            currency: 'INR',
+            provider: 'SYSTEM',
+            status: 'success',
+            transaction_ref: `FREE_${Date.now()}`
+          }
+        });
+
+        // Return immediately. Tell the frontend no payment is needed.
+        return { isFree: true, team, registration };
+      }
+
+      // ==========================================
+      // RAZORPAY: Handle Paid Events
+      // ==========================================
+      const amountInPaisa = fee * 100;
       
       const order = await razorpay.orders.create({
         amount: amountInPaisa,
@@ -55,10 +81,121 @@ export class CheckoutService {
         receipt: `receipt_team_${team.id}`,
       });
 
-      return { team, registration, order };
+      // Tell the frontend to open the Razorpay UI
+      return { isFree: false, team, registration, order };
+    });
+  }
+  // ==========================================
+  // INDIVIDUAL REGISTRATION FLOW
+  // ==========================================
+
+  // 1. INITIALIZE INDIVIDUAL REGISTRATION
+  static async initializeIndividualRegistration(userId: number, eventId: number) {
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error("Event not found");
+
+    // Optional Validation: Ensure this event actually allows individual participation
+    if (event.registration_type !== 'individual' && event.min_team_size > 1) {
+      throw new Error("This event requires you to register as a team.");
+    }
+
+    // Check to prevent double registration
+    const existingRegistration = await prisma.registration.findFirst({
+      where: { event_id: eventId, user_id: userId }
+    });
+    if (existingRegistration) throw new Error("You are already registered for this event.");
+
+    const fee = Number(event.registration_fee);
+    const isFree = fee === 0;
+
+    return prisma.$transaction(async (tx) => {
+      
+      // A. Create Registration (No Team involved!)
+      const registration = await tx.registration.create({
+        data: {
+          user_id: userId,
+          event_id: eventId,
+          status: isFree ? 'confirmed' : 'pending'
+          // Notice: team_id is left completely empty 
+        }
+      });
+
+      // B. Handle Free Events
+      if (isFree) {
+        await tx.payment.create({
+          data: {
+            registration_id: registration.id,
+            amount: 0,
+            currency: 'INR',
+            provider: 'SYSTEM',
+            status: 'success',
+            transaction_ref: `FREE_IND_${Date.now()}`
+          }
+        });
+        return { isFree: true, registration };
+      }
+
+      // C. Handle Paid Events via Razorpay
+      const amountInPaisa = fee * 100;
+      const order = await razorpay.orders.create({
+        amount: amountInPaisa,
+        currency: "INR",
+        receipt: `receipt_ind_${registration.id}`,
+      });
+
+      return { isFree: false, registration, order };
     });
   }
 
+
+  // 2. VERIFY INDIVIDUAL PAYMENT
+  static async verifyIndividualPayment(
+    razorpayOrderId: string, 
+    razorpayPaymentId: string, 
+    razorpaySignature: string,
+    registrationId: number
+  ) {
+    // A. Cryptographic Verification
+    const body = razorpayOrderId + "|" + razorpayPaymentId;
+    const expectedSignature = crypto
+      .createHmac('sha256', config.RAZORPAY_KEY_SECRET!)
+      .update(body.toString())
+      .digest('hex');
+
+    if (expectedSignature !== razorpaySignature) {
+      throw new Error("Invalid payment signature. Payment rejected.");
+    }
+
+    // B. If valid, update database
+    return prisma.$transaction(async (tx) => {
+      const registration = await tx.registration.findUnique({ 
+        where: { id: registrationId },
+        include: { event: true }
+      });
+
+      if (!registration) throw new Error("Registration not found");
+
+      // 1. Save Payment Record
+      await tx.payment.create({
+        data: {
+          registration_id: registration.id,
+          amount: registration.event.registration_fee,
+          currency: 'INR',
+          provider: 'Razorpay',
+          status: 'success',
+          transaction_ref: razorpayPaymentId
+        }
+      });
+
+      // 2. Mark Registration as Confirmed
+      await tx.registration.update({
+        where: { id: registration.id },
+        data: { status: 'confirmed' }
+      });
+
+      return { success: true, registrationId: registration.id };
+    });
+  }
   // 2. VERIFY SECURE SIGNATURE & ACTIVATE TEAM
   static async verifyTeamPayment(
     razorpayOrderId: string, 

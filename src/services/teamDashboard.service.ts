@@ -109,4 +109,103 @@ export class TeamDashboardService {
       return { success: true, message: "Member removed successfully" };
     });
   }
+
+  // ==========================================
+  // 5. VERIFY TEAM INVITATION (PUBLIC)
+  // ==========================================
+  static async verifyInviteToken(token: string) {
+    const invite = await prisma.teamInvite.findUnique({
+      where: { token },
+      include: {
+        team: { 
+          include: { 
+            event: { select: { title: true, banner_url: true } } // Fetch event details for the UI
+          } 
+        }
+      }
+    });
+
+    if (!invite) throw new Error("Invalid invitation link.");
+    if (invite.status !== 'pending') throw new Error("This invitation has already been used or revoked.");
+    if (invite.expires_at < new Date()) throw new Error("This invitation has expired.");
+
+    // Return safe data for the frontend to display the "You're Invited!" screen
+    return {
+      emailInvited: invite.email,
+      teamName: invite.team.name,
+      eventName: invite.team.event.title,
+      eventBanner: invite.team.event.banner_url
+    };
+  }
+
+  // ==========================================
+  // 6. ACCEPT TEAM INVITATION (SECURE)
+  // ==========================================
+  static async acceptInvite(userId: number, token: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error("User not found");
+
+    const invite = await prisma.teamInvite.findUnique({ 
+      where: { token },
+      include: { team: true }
+    });
+
+    // Validations
+    if (!invite) throw new Error("Invalid invitation token");
+    if (invite.status !== 'pending') throw new Error("Invitation already used or revoked");
+    if (invite.expires_at < new Date()) throw new Error("Invitation has expired");
+    
+    // Strict email check to prevent token forwarding
+    if (invite.email !== user.email) {
+      throw new Error("This invite was sent to a different email address. Please log in with the correct account.");
+    }
+
+    // Use a transaction to ensure all database steps succeed together
+    return prisma.$transaction(async (tx) => {
+      
+      // A. Mark Invite as Accepted [cite: 17]
+      await tx.teamInvite.update({
+        where: { id: invite.id },
+        data: { status: 'accepted' }
+      });
+
+      // B. Add User to the Team [cite: 19]
+      await tx.teamMember.create({
+        data: {
+          team_id: invite.team_id,
+          user_id: userId
+        }
+      });
+
+      // C. Handle Event Registration [cite: 14, 15]
+      // Check if the user is already registered for this event (e.g., they registered solo first)
+      const existingRegistration = await tx.registration.findFirst({
+        where: { event_id: invite.team.event_id, user_id: userId }
+      });
+
+      if (existingRegistration) {
+        // Update existing registration to link to this team 
+        await tx.registration.update({
+          where: { id: existingRegistration.id },
+          data: { team_id: invite.team_id, status: 'confirmed' }
+        });
+      } else {
+        // Create a brand new registration for the event 
+        await tx.registration.create({
+          data: {
+            event_id: invite.team.event_id,
+            user_id: userId,
+            team_id: invite.team_id,
+            status: 'confirmed'
+          }
+        });
+      }
+
+      return { 
+        success: true, 
+        teamId: invite.team_id, 
+        teamName: invite.team.name 
+      };
+    });
+  }
 }

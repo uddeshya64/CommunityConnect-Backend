@@ -13,6 +13,7 @@ export const VerifyPaymentSchema = z.object({
   razorpay_payment_id: z.string().min(1, "Razorpay Payment ID is required"),
   razorpay_signature: z.string().min(1, "Razorpay Signature is required"),
   team_id: z.coerce.number().int().positive("Valid Team ID is required"),
+  registration_id: z.coerce.number().int().optional(),
 });
 
 // 3. Schema for Inviting a Team Member (For the dashboard)

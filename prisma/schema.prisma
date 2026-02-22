@@ -10,14 +10,6 @@ datasource db {
 
 // --- Enums ---
 
-enum EventRole {
-  CO_HOST   
-  JUDGE      
-  MENTOR    
-  VOLUNTEER 
-  SPEAKER   
-}
-
 enum EventType {
   hackathon
   workshop
@@ -93,14 +85,17 @@ model Event {
   registration_fee  Decimal // 'number' for money is best as Decimal
   max_team_size     Int
   min_team_size     Int
+  location          String?
   rewards           Json? @default("{}") // 'jsonb'
   created_by        Int
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
 
-  // Relationships
-  creator            User                @relation("CreatedEvents", fields: [created_by], references: [id])
+// Relationships
+  creator            User                  @relation("CreatedEvents", fields: [created_by], references: [id])
   user_roles         EventUserRole[]
+  role_definitions   EventRoleDefinition[] 
+  staff_invites      EventStaffInvite[]    
   registrations      Registration[]
   teams              Team[]
   submissions        Submission[]
@@ -109,23 +104,24 @@ model Event {
 
   @@map("events")
 }
+
 model EventUserRole {
-  id          Int       @id @default(autoincrement())
-  event_id    Int
-  user_id     Int
-  role        EventRole // <--- CHANGED: Uses Enum now
-  permissions Json?     // <--- ADDED: For granular powers (e.g. { "canScan": true })
-  assigned_at DateTime  @default(now())
+  id                   Int       @id @default(autoincrement())
+  event_id             Int
+  user_id              Int
+  role_id              Int       // <--- CHANGED: Points to EventRoleDefinition.id
+  permissions_override Json?     // <--- Keeps the ability to give specific users extra powers
+  assigned_at          DateTime  @default(now())
 
   // Relationships
-  event Event @relation(fields: [event_id], references: [id])
-  user  User  @relation(fields: [user_id], references: [id])
+  event Event               @relation(fields: [event_id], references: [id])
+  user  User                @relation(fields: [user_id], references: [id])
+  role  EventRoleDefinition @relation(fields: [role_id], references: [id]) // <--- ADDED
 
-  // REMOVED: role Role @relation(...)
-  
-  @@unique([event_id, user_id]) // Ensures a user has only ONE staff role per event
+  @@unique([event_id, user_id]) 
   @@map("event_user_roles")
 }
+
 model Registration {
   id         Int                @id @default(autoincrement())
   event_id   Int
@@ -249,4 +245,38 @@ model EventAnnouncement {
   event Event @relation(fields: [event_id], references: [id])
 
   @@map("event_announcements")
+}
+
+model EventRoleDefinition {
+  id          Int      @id @default(autoincrement())
+  event_id    Int
+  name        String   @db.VarChar(50) 
+  permissions Json     
+  is_system   Boolean  @default(false) 
+
+  // Relationships
+  event         Event              @relation(fields: [event_id], references: [id])
+  users         EventUserRole[] 
+  staff_invites EventStaffInvite[] 
+
+  @@unique([event_id, name]) 
+  @@map("event_role_definitions")
+}
+
+model EventStaffInvite {
+  id         Int      @id @default(autoincrement())
+  event_id   Int
+  email      String   @db.VarChar(255)
+  role_id    Int      // The role they are being invited to fill
+  token      String   @unique
+  status     String   @default("pending") // pending, accepted, expired
+  created_at DateTime @default(now())
+  expires_at DateTime
+
+  // Relationships
+  event      Event               @relation(fields: [event_id], references: [id])
+  role       EventRoleDefinition @relation(fields: [role_id], references: [id])
+
+  @@unique([event_id, email]) // Prevent spamming the same person for the same event
+  @@map("event_staff_invites")
 }
