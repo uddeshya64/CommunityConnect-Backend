@@ -11,3 +11,8 @@ export const RemoveMemberSchema = z.object({
 export const InviteMemberSchema = z.object({
   email: z.string().trim().email("Invalid email address"),
 });
+
+// Add the new schema for accepting invites
+export const AcceptTeamInviteSchema = z.object({
+  token: z.string().min(10, "Invalid token format"),
+});

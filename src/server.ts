@@ -11,6 +11,7 @@ import profileRoutes from './routes/profile.routes'
 import eventRoutes from './routes/event.routes'
 import teamRoutes from './routes/team.routes'
 import teamDashboardRoutes from './routes/teamDashboard.routes';
+import eventStaffRoutes from './routes/eventStaff.routes';
 import { config } from './config/env';
 
 // Initialize App
@@ -28,7 +29,10 @@ app.use(helmet());
 
 // B. CORS: Allow your React Frontend to talk to this Backend
 app.use(cors({
-  origin: config.FRONTEND_URL || 'http://localhost:5173', // Vite default port
+    origin: [
+    "http://localhost:8080",
+    "http://192.168.29.81:8080",
+  ],  // Vite default port
   credentials: true, // Allow cookies if needed
   methods: ['GET', 'POST', 'PUT', 'DELETE']
 }));
@@ -48,21 +52,34 @@ app.use('/api', globalLimiter);
 // 2. ROUTE MOUNTING
 // =========================================
 
-// Health Check (For Docker/AWS/K8s)
+// Health Check
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'UP', timestamp: new Date() });
 });
 
-// Mount Routes
+// Auth & User
 app.use('/api/auth', authRoutes);
-
 app.use('/api/profile', profileRoutes);
 
+// Events & Staff Management
 app.use('/api/events', eventRoutes);
+app.use('/api/events/:eventId/staff', eventStaffRoutes); // For organizers
+app.use('/api/staff', eventStaffRoutes);                 // For staff accepting invites
 
-app.use('/api/team', teamRoutes);
+// Participant Registration (Solo or Team)
+app.use('/api/registration', teamRoutes); 
 
-app.use('/api/teamDashboard',teamDashboardRoutes)
+// Team Management & Participant Invites
+app.use('/api/team-dashboard', teamDashboardRoutes);
+
+
+// Path A: For Organizer actions (Requires the specific Event ID in the URL)
+// This handles: POST /api/events/5/staff/roles and POST /api/events/5/staff/invite
+app.use('/api/events/:eventId/staff', eventStaffRoutes);
+
+// Path B: For User actions (No Event ID needed yet because it's inside the magic link token)
+// This handles: POST /api/staff/accept-invite
+app.use('/api/staff', eventStaffRoutes);
 
 // =========================================
 // 3. GLOBAL ERROR HANDLER

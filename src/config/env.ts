@@ -18,6 +18,7 @@ const envSchema = z.object({
   EMAIL_PASS: z.string().min(1),
 
   FRONTEND_URL: z.string().url("Must be a valid URL"), 
+  
   // RAZORPAY CONFIG
   RAZORPAY_KEY_ID: z.string().min(1, "Razorpay Key ID is required"),
   RAZORPAY_KEY_SECRET: z.string().min(1, "Razorpay Key Secret is required"),

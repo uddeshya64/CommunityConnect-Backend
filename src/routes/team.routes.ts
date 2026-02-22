@@ -1,13 +1,16 @@
 import { Router } from 'express';
 import { TeamController } from '../controllers/team.controller';
 import { authLimiter } from '../middlewares/security';
+import { authenticate } from '../middlewares/auth.middleware';
 
 const router = Router();
 
-// POST /api/teams/register
-router.post('/register', authLimiter, TeamController.startRegistration);
+router.use(authenticate);
 
-// POST /api/payments/verify
-router.post('/register/verify', authLimiter, TeamController.verifyPayment);
+// Unified endpoint for both Team and Individual registration 
+router.post('/start', authLimiter, TeamController.startRegistration);
+
+// Unified endpoint for payment verification [cite: 14, 16]
+router.post('/verify', authLimiter, TeamController.verifyPayment);
 
 export default router;
