@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { EventController } from '../controllers/event.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate , optionalAuthenticate} from '../middlewares/auth.middleware';
 
 const router = Router();
 
@@ -8,7 +8,7 @@ const router = Router();
 // Note: apply 'authenticate' optionally to 'getOne' if your middleware supports optional auth, 
 // OR just handle the "no token" case in middleware to not crash but leave req.user undefined.
 router.get('/', EventController.getFeed);
-router.get('/:id', authenticate, EventController.getOne); 
+router.get('/:id', optionalAuthenticate, EventController.getOne); 
 // ^ If you want guest users to view events, ensure your 'authenticate' middleware 
 // doesn't block requests without tokens, or create a specific 'optionalAuth' middleware.
 

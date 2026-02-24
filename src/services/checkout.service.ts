@@ -12,20 +12,63 @@ const razorpay = new Razorpay({
 });
 
 export class CheckoutService {
-  
-// 1. INITIALIZE REGISTRATION & ORDER
+// ==========================================
+  // 1. TEAM REGISTRATION FLOW (UPDATED)
+  // ==========================================
   static async initializeTeamRegistration(userId: number, eventId: number, teamName: string) {
-    // A. Fetch Event to get the authoritative price
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error("Event not found");
 
     const fee = Number(event.registration_fee);
     const isFree = fee === 0;
 
-    // Industry Standard: Database Transaction
+    // A. THE FIX: Check if the user already has a registration for this event
+    const existingRegistration = await prisma.registration.findFirst({
+      where: { user_id: userId, event_id: eventId },
+      include: { team: true }
+    });
+
+    if (existingRegistration) {
+      // If they already paid, block them completely
+      if (existingRegistration.status === 'confirmed') {
+        throw new Error("You are already registered for this event.");
+      }
+
+      // B. REUSE LOGIC: If it's pending, reuse the existing team and registration!
+      if (existingRegistration.status === 'pending' && existingRegistration.team) {
+        
+        // Optionally update the team name if they changed it on the frontend retry
+        if (existingRegistration.team.name !== teamName) {
+          await prisma.team.update({
+            where: { id: existingRegistration.team.id },
+            data: { name: teamName }
+          });
+          existingRegistration.team.name = teamName;
+        }
+
+        if (isFree) {
+          // Edge case: It was pending, but now it's free. Confirm it.
+          await prisma.registration.update({ where: { id: existingRegistration.id }, data: { status: 'confirmed' } });
+          await prisma.team.update({ where: { id: existingRegistration.team.id }, data: { status: 'active' } });
+          return { isFree: true, team: existingRegistration.team, registration: existingRegistration };
+        }
+
+        // Generate a fresh Razorpay order for the EXISTING team
+        // We append Date.now() to the receipt so Razorpay doesn't complain about duplicate receipts
+        const amountInPaisa = fee * 100;
+        const order = await razorpay.orders.create({
+          amount: amountInPaisa,
+          currency: "INR",
+          receipt: `receipt_team_${existingRegistration.team.id}_retry_${Date.now()}`,
+        });
+
+        // Return the existing data
+        return { isFree: false, team: existingRegistration.team, registration: existingRegistration, order };
+      }
+    }
+
+    // C. NORMAL FLOW: If no registration exists at all, create a brand new one
     return prisma.$transaction(async (tx) => {
-      
-      // B. Create the Team (If free, instantly active. Otherwise, draft)
       const team = await tx.team.create({
         data: {
           name: teamName,
@@ -35,12 +78,10 @@ export class CheckoutService {
         }
       });
 
-      // C. Add Leader as a Team Member
       await tx.teamMember.create({
         data: { team_id: team.id, user_id: userId }
       });
 
-      // D. Create Registration (If free, instantly confirmed)
       const registration = await tx.registration.create({
         data: {
           user_id: userId,
@@ -50,11 +91,7 @@ export class CheckoutService {
         }
       });
 
-      // ==========================================
-      // THE BYPASS: Handle Free Events
-      // ==========================================
       if (isFree) {
-        // Create a zero-amount payment record for database consistency
         await tx.payment.create({
           data: {
             registration_id: registration.id,
@@ -62,65 +99,76 @@ export class CheckoutService {
             currency: 'INR',
             provider: 'SYSTEM',
             status: 'success',
-            transaction_ref: `FREE_${Date.now()}`
+            transaction_ref: `FREE_TEAM_${Date.now()}`
           }
         });
-
-        // Return immediately. Tell the frontend no payment is needed.
         return { isFree: true, team, registration };
       }
 
-      // ==========================================
-      // RAZORPAY: Handle Paid Events
-      // ==========================================
       const amountInPaisa = fee * 100;
-      
       const order = await razorpay.orders.create({
         amount: amountInPaisa,
         currency: "INR",
         receipt: `receipt_team_${team.id}`,
       });
 
-      // Tell the frontend to open the Razorpay UI
       return { isFree: false, team, registration, order };
     });
   }
-  // ==========================================
-  // INDIVIDUAL REGISTRATION FLOW
-  // ==========================================
 
-  // 1. INITIALIZE INDIVIDUAL REGISTRATION
+
+  // ==========================================
+  // 2. INDIVIDUAL REGISTRATION FLOW (UPDATED)
+  // ==========================================
   static async initializeIndividualRegistration(userId: number, eventId: number) {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error("Event not found");
 
-    // Optional Validation: Ensure this event actually allows individual participation
     if (event.registration_type !== 'individual' && event.min_team_size > 1) {
       throw new Error("This event requires you to register as a team.");
     }
 
-    // Check to prevent double registration
-    const existingRegistration = await prisma.registration.findFirst({
-      where: { event_id: eventId, user_id: userId }
-    });
-    if (existingRegistration) throw new Error("You are already registered for this event.");
-
     const fee = Number(event.registration_fee);
     const isFree = fee === 0;
 
+    // A. THE FIX: Check for existing individual registration
+    const existingRegistration = await prisma.registration.findFirst({
+      where: { event_id: eventId, user_id: userId }
+    });
+
+    if (existingRegistration) {
+      if (existingRegistration.status === 'confirmed') {
+        throw new Error("You are already registered for this event.");
+      }
+
+      // B. REUSE LOGIC: If pending, just generate a new Razorpay order
+      if (existingRegistration.status === 'pending') {
+        if (isFree) {
+          await prisma.registration.update({ where: { id: existingRegistration.id }, data: { status: 'confirmed' } });
+          return { isFree: true, registration: existingRegistration };
+        }
+
+        const amountInPaisa = fee * 100;
+        const order = await razorpay.orders.create({
+          amount: amountInPaisa,
+          currency: "INR",
+          receipt: `receipt_ind_${existingRegistration.id}_retry_${Date.now()}`,
+        });
+
+        return { isFree: false, registration: existingRegistration, order };
+      }
+    }
+
+    // C. NORMAL FLOW: Create brand new registration
     return prisma.$transaction(async (tx) => {
-      
-      // A. Create Registration (No Team involved!)
       const registration = await tx.registration.create({
         data: {
           user_id: userId,
           event_id: eventId,
           status: isFree ? 'confirmed' : 'pending'
-          // Notice: team_id is left completely empty 
         }
       });
 
-      // B. Handle Free Events
       if (isFree) {
         await tx.payment.create({
           data: {
@@ -135,7 +183,6 @@ export class CheckoutService {
         return { isFree: true, registration };
       }
 
-      // C. Handle Paid Events via Razorpay
       const amountInPaisa = fee * 100;
       const order = await razorpay.orders.create({
         amount: amountInPaisa,
@@ -145,8 +192,7 @@ export class CheckoutService {
 
       return { isFree: false, registration, order };
     });
-  }
-
+  } 
 
   // 2. VERIFY INDIVIDUAL PAYMENT
   static async verifyIndividualPayment(

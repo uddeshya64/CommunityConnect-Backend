@@ -34,4 +34,38 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
   } catch (error) {
     return res.status(403).json({ error: "Forbidden: Invalid or expired token" });
   }
+}
+
+/**
+ * OPTIONAL AUTHENTICATE
+ * Does not block the request if the token is missing or invalid.
+ * Used for public routes where we want to attach user context IF they happen to be logged in.
+ */
+export const optionalAuthenticate = (
+  req: Request, 
+  res: Response, 
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    // 1. If there's no token, proceed as a Guest
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    // 2. Try to verify the token
+    const decoded = jwt.verify(token, config.JWT_SECRET as string);
+
+    // 3. Attach the decoded user payload (e.g., { id: 1, email: '...' })
+    req.user = decoded as any; 
+
+    next();
+  } catch (error) {
+    // 4. CRITICAL DIFFERENCE: If the token is expired or invalid, 
+    // DO NOT throw an error. Just proceed as a Guest.
+    next();
+  }
 };
