@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { EventStaffController } from '../controllers/eventStaff.controller';
+import { EventStaffController } from '../controllers/staffManagement.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 import { requirePermission } from '../middlewares/requirePermission.middleware';
 

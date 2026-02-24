@@ -8,6 +8,7 @@ const prisma = new PrismaClient();
 export class TeamDashboardService {
 
   // 1. GET TEAM DETAILS (For the Dashboard UI)
+  // 1. GET TEAM DETAILS (For the Dashboard UI)
   static async getTeamDetails(teamId: number, requestingUserId: number) {
     const team = await prisma.team.findUnique({
       where: { id: teamId },
@@ -17,7 +18,16 @@ export class TeamDashboardService {
         },
         invites: {
           where: { status: 'pending' },
-          select: { id: true, email: true, expires_at: true }
+          select: { id: true, email: true, expires_at: true },
+        },
+        // 👇 NEW: Fetch the specific event rules for this team
+        event: {
+          select: {
+            id: true,
+            title: true,
+            min_team_size: true,
+            max_team_size: true
+          }
         }
       }
     });
@@ -28,9 +38,21 @@ export class TeamDashboardService {
     const isMember = team.members.some(m => m.user_id === requestingUserId);
     if (!isMember) throw new Error("Unauthorized: You are not a member of this team");
 
+    // 👇 NEW: Calculate capacity to make frontend UI rendering trivial
+    // We count pending invites as "taken" seats so a leader can't accidentally over-invite
+    const totalSeatsTaken = team.members.length + team.invites.length;
+    const seatsAvailable = team.event.max_team_size - totalSeatsTaken;
+
     return {
       ...team,
-      is_leader: team.leader_id === requestingUserId // Tell frontend if this user is the boss
+      is_leader: team.leader_id === requestingUserId, 
+      
+      // Send pre-calculated state to the React frontend
+      capacity: {
+        is_full: seatsAvailable <= 0,
+        seats_available: Math.max(0, seatsAvailable),
+        meets_minimum: team.members.length >= team.event.min_team_size
+      }
     };
   }
 

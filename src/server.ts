@@ -11,7 +11,7 @@ import profileRoutes from './routes/profile.routes'
 import eventRoutes from './routes/event.routes'
 import teamRoutes from './routes/team.routes'
 import teamDashboardRoutes from './routes/teamDashboard.routes';
-import eventStaffRoutes from './routes/eventStaff.routes';
+import eventStaffRoutes from './routes/staffManagement.routes';
 import { config } from './config/env';
 
 // Initialize App
@@ -28,13 +28,12 @@ const PORT = Number(config.PORT) || 3000;
 app.use(helmet());
 
 // B. CORS: Allow your React Frontend to talk to this Backend
+// Inside your backend's server.ts file
 app.use(cors({
-    origin: [
-    "http://localhost:8080",
-    "http://192.168.29.81:8080",
-  ],  // Vite default port
-  credentials: true, // Allow cookies if needed
-  methods: ['GET', 'POST', 'PUT', 'DELETE']
+  origin: true, // Reflects the origin of the request, essentially allowing everything
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 // C. Body Parser: Strict limit to prevent DoS via large payloads
@@ -61,25 +60,31 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 
-// Events & Staff Management
-app.use('/api/events', eventRoutes);
-app.use('/api/events/:eventId/staff', eventStaffRoutes); // For organizers
-app.use('/api/staff', eventStaffRoutes);                 // For staff accepting invites
-
 // Participant Registration (Solo or Team)
 app.use('/api/registration', teamRoutes); 
 
 // Team Management & Participant Invites
 app.use('/api/team-dashboard', teamDashboardRoutes);
 
+// --- STAFF DASHBOARD & MANAGEMENT ROUTES ---
+// We mount all admin features under this unified prefix
 
-// Path A: For Organizer actions (Requires the specific Event ID in the URL)
-// This handles: POST /api/events/5/staff/roles and POST /api/events/5/staff/invite
-app.use('/api/events/:eventId/staff', eventStaffRoutes);
+app.use('/api/events/:eventId/manage', [
+  eventStaffRoutes, // For Roles & Invites
+  // timelineRoutes,        // For Agenda (Coming next!)
+  // submissionRoutes       // For Reviewing Projects
+]);
 
+// Public Staff Actions (Accepting Invites)
 // Path B: For User actions (No Event ID needed yet because it's inside the magic link token)
 // This handles: POST /api/staff/accept-invite
 app.use('/api/staff', eventStaffRoutes);
+// Events & Staff Management
+app.use('/api/events', eventRoutes);
+app.use('/api/events/:eventId/staff', eventStaffRoutes); // For organizers
+
+
+
 
 // =========================================
 // 3. GLOBAL ERROR HANDLER

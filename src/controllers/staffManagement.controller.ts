@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { EventStaffService } from '../services/eventStaff.service';
+import { EventStaffService } from '../services/staffManagement.service';
 import { CreateCustomRoleSchema, InviteStaffSchema, AcceptStaffInviteSchema } from '../validation/eventStaff.validation';
 import { ZodError } from 'zod';
 

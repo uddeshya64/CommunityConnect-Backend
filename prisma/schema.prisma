@@ -4,8 +4,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL") // Uses the connection pool
-  directUrl = env("DIRECT_URL") // Uses the direct connection for migrations
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // --- Enums ---
@@ -44,20 +44,21 @@ enum TeamStatus {
 // --- Models ---
 
 model User {
-  id            Int      @id @default(autoincrement())
-  name          String
-  email         String   @unique
-  phone         String? // 'number' is usually best stored as String to preserve formatting/leading zeros
-  password_hash String
-  skills        String[] // Array type
-  linkedin      String?
-  github        String?
-  profession    String?
-  bio           String?
-  avatar_url    String?
-  location      String?
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  id                 Int                @id @default(autoincrement())
+  name               String
+  email              String             @unique
+  phone              String?
+  password_hash      String
+  skills             String[]
+  linkedin           String?
+  github             String?
+  profession         String?
+  bio                String?
+  avatar_url         String?
+  location           String?
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  fcm_token          String?            @db.Text
 
   // Relationships
   events_created     Event[]            @relation("CreatedEvents")
@@ -72,35 +73,38 @@ model User {
 }
 
 model Event {
-  id                Int       @id @default(autoincrement())
-  title             String    @db.VarChar(150)
-  description       String
-  type              EventType
-  mode              EventMode
-  banner_url        String?
-  logo_url          String?
-  start_date        DateTime
-  end_date          DateTime
-  registration_type String
-  registration_fee  Decimal // 'number' for money is best as Decimal
-  max_team_size     Int
-  min_team_size     Int
-  location          String?
-  rewards           Json? @default("{}") // 'jsonb'
-  created_by        Int
-  created_at        DateTime  @default(now())
-  updated_at        DateTime  @updatedAt
+  id                 Int                   @id @default(autoincrement())
+  title              String                @db.VarChar(150)
+  description        String
+  type               EventType
+  mode               EventMode
+  banner_url         String?
+  logo_url           String?
+  start_date         DateTime
+  end_date           DateTime
+  registration_type  String
+  registration_fee   Decimal
+  max_team_size      Int
+  min_team_size      Int
+  location           String?
+  rewards            Json?                 @default("{}")
+  created_at         DateTime              @default(now())
+  updated_at         DateTime              @updatedAt
 
-// Relationships
-  creator            User                  @relation("CreatedEvents", fields: [created_by], references: [id])
+  // Foreign Key
+  created_by         Int
+
+  // Relationships
+  creator            User                  @relation("CreatedEvents", fields: [created_by], references: [id], onDelete: Cascade)
   user_roles         EventUserRole[]
-  role_definitions   EventRoleDefinition[] 
-  staff_invites      EventStaffInvite[]    
+  role_definitions   EventRoleDefinition[]
+  staff_invites      EventStaffInvite[]
   registrations      Registration[]
   teams              Team[]
   submissions        Submission[]
   mentor_assignments MentorAssignment[]
   announcements      EventAnnouncement[]
+  timelines          EventTimeline[]       // <--- ADDED THIS FIX
 
   @@map("events")
 }
@@ -109,14 +113,14 @@ model EventUserRole {
   id                   Int       @id @default(autoincrement())
   event_id             Int
   user_id              Int
-  role_id              Int       // <--- CHANGED: Points to EventRoleDefinition.id
-  permissions_override Json?     // <--- Keeps the ability to give specific users extra powers
+  role_id              Int       
+  permissions_override Json?
   assigned_at          DateTime  @default(now())
 
   // Relationships
   event Event               @relation(fields: [event_id], references: [id])
   user  User                @relation(fields: [user_id], references: [id])
-  role  EventRoleDefinition @relation(fields: [role_id], references: [id]) // <--- ADDED
+  role  EventRoleDefinition @relation(fields: [role_id], references: [id]) 
 
   @@unique([event_id, user_id]) 
   @@map("event_user_roles")
@@ -126,15 +130,15 @@ model Registration {
   id         Int                @id @default(autoincrement())
   event_id   Int
   user_id    Int
-  team_id    Int? // Optional, only for hackathons
+  team_id    Int?
   status     RegistrationStatus
   created_at DateTime           @default(now())
 
   // Relationships
-  event    Event     @relation(fields: [event_id], references: [id])
-  user     User      @relation(fields: [user_id], references: [id])
-  team     Team?     @relation(fields: [team_id], references: [id])
-  payments Payment[]
+  event      Event     @relation(fields: [event_id], references: [id])
+  user       User      @relation(fields: [user_id], references: [id])
+  team       Team?     @relation(fields: [team_id], references: [id])
+  payments   Payment[]
 
   @@map("registrations")
 }
@@ -150,24 +154,23 @@ model Payment {
   created_at      DateTime      @default(now())
 
   // Relationships
-  registration Registration @relation(fields: [registration_id], references: [id])
+  registration     Registration @relation(fields: [registration_id], references: [id], onDelete: Cascade)
 
   @@map("payments")
 }
 
-// THIS MODEL: To track pending email invites
 model TeamInvite {
   id         Int      @id @default(autoincrement())
   team_id    Int
-  email      String   // The email of the person being invited
-  token      String   @unique // A secure random string for the Magic Link
-  status     String   @default("pending") // pending, accepted, expired
+  email      String   
+  token      String   @unique 
+  status     String   @default("pending") 
   created_at DateTime @default(now())
   expires_at DateTime
 
   team       Team     @relation(fields: [team_id], references: [id])
 
-  @@unique([team_id, email]) // Prevent spamming the same email for the same team
+  @@unique([team_id, email]) 
   @@map("team_invites")
 }
 
@@ -187,7 +190,7 @@ model Team {
   members            TeamMember[]
   submissions        Submission[]
   mentor_assignments MentorAssignment[]
-  invites TeamInvite[]
+  invites            TeamInvite[]
 
   @@map("teams")
 }
@@ -200,7 +203,7 @@ model TeamMember {
   team Team @relation(fields: [team_id], references: [id])
   user User @relation(fields: [user_id], references: [id])
 
-  @@id([team_id, user_id]) // Composite Primary Key
+  @@id([team_id, user_id]) 
   @@map("team_members")
 }
 
@@ -231,7 +234,7 @@ model MentorAssignment {
   mentor User  @relation(fields: [mentor_id], references: [id])
   team   Team  @relation(fields: [team_id], references: [id])
 
-  @@id([event_id, mentor_id, team_id]) // Composite PK
+  @@id([event_id, mentor_id, team_id]) 
   @@map("mentor_assignments")
 }
 
@@ -267,9 +270,9 @@ model EventStaffInvite {
   id         Int      @id @default(autoincrement())
   event_id   Int
   email      String   @db.VarChar(255)
-  role_id    Int      // The role they are being invited to fill
+  role_id    Int      
   token      String   @unique
-  status     String   @default("pending") // pending, accepted, expired
+  status     String   @default("pending") 
   created_at DateTime @default(now())
   expires_at DateTime
 
@@ -277,6 +280,23 @@ model EventStaffInvite {
   event      Event               @relation(fields: [event_id], references: [id])
   role       EventRoleDefinition @relation(fields: [role_id], references: [id])
 
-  @@unique([event_id, email]) // Prevent spamming the same person for the same event
+  @@unique([event_id, email]) 
   @@map("event_staff_invites")
+}
+
+model EventTimeline {
+  id              Int      @id @default(autoincrement())
+  event_id        Int
+  title           String   @db.VarChar(100)
+  speaker_name    String?  @db.VarChar(100) 
+  description     String?  @db.Text
+  start_time      DateTime
+  end_time        DateTime?
+  location        String?  
+  should_notify   Boolean  @default(true)  
+  is_notified     Boolean  @default(false) 
+
+  event           Event    @relation(fields: [event_id], references: [id])
+
+  @@map("event_timelines")
 }
