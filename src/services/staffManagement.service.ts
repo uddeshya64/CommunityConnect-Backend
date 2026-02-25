@@ -7,6 +7,20 @@ const prisma = new PrismaClient();
 
 export class EventStaffService {
 
+  // Fetch all available roles for a specific event
+  static async getRoles(eventId: number) {
+    return prisma.eventRoleDefinition.findMany({
+      where: { event_id: eventId },
+      select: {
+        id: true,
+        name: true,
+        permissions: true,
+        is_system: true
+      },
+      orderBy: { name: 'asc' }
+    });
+  }
+
   // ==========================================
   // 1. CREATE A CUSTOM ROLE
   // ==========================================

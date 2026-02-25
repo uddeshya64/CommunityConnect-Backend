@@ -5,6 +5,21 @@ import { ZodError } from 'zod';
 
 export const EventStaffController = {
 
+  // GET ALL ROLES FOR AN EVENT
+  async getRoles(req: Request, res: Response) {
+    try {
+      const eventId = Number(req.params.eventId);
+      
+      // Assuming your EventStaffService has a method to get roles. 
+      // If it doesn't, you can query Prisma directly here.
+      const roles = await EventStaffService.getRoles(eventId); 
+
+      res.json({ success: true, data: roles });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+
   // 1. CREATE CUSTOM ROLE
   async createCustomRole(req: Request, res: Response) {
     try {
