@@ -30,7 +30,12 @@ app.use(helmet());
 // B. CORS: Allow your React Frontend to talk to this Backend
 // Inside your backend's server.ts file
 app.use(cors({
-  origin: true, // Reflects the origin of the request, essentially allowing everything
+  // Use the frontend URL from your config/env
+  origin: [
+    config.FRONTEND_URL,      // e.g., https://codehack.in
+    "http://localhost:3000",  // Keep local development working
+    "http://192.168.29.81:3000"
+  ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
