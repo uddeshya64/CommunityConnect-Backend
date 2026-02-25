@@ -29,16 +29,31 @@ app.use(helmet());
 
 // B. CORS: Allow your React Frontend to talk to this Backend
 // Inside your backend's server.ts file
+const allowedOrigins = [
+  'http://localhost:3000', 
+  'http://localhost:3001',
+  'http://192.168.29.81:3001', // Your mobile/local testing IP
+  config.FRONTEND_URL    // Your live Vercel URL
+];
+
 app.use(cors({
-  // Use the frontend URL from your config/env
-  origin: [
-    config.FRONTEND_URL,      // e.g., https://codehack.in
-    "http://localhost:3000",  // Keep local development working
-    "http://192.168.29.81:3000"
-  ],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Remove trailing slashes from the origin just in case
+    const cleanOrigin = origin.replace(/\/$/, '');
+
+    if (allowedOrigins.indexOf(cleanOrigin) !== -1 || !process.env.FRONTEND_URL) {
+      callback(null, true);
+    } else {
+      console.log('Blocked by CORS. Origin:', origin); // Helps with debugging!
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // REQUIRED if you are sending tokens/cookies
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Upgrade-Insecure-Requests']
 }));
 
 // C. Body Parser: Strict limit to prevent DoS via large payloads
