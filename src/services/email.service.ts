@@ -3,11 +3,21 @@ import { config } from '../config/env';
 
 // --- EMAIL TRANSPORTER SETUP ---
 const transporter = nodemailer.createTransport({
-  service: "gmail", // In production, switch to 'SES', 'SendGrid', or 'Resend'
+  host: "smtp.gmail.com",
+  port: 587,           // Use 587 instead of the default 465
+  secure: false,       // false for 587, it will upgrade to TLS automatically
   auth: {
     user: config.EMAIL_USER,
     pass: config.EMAIL_PASS,
   },
+  // 👇 THE RENDER FIX: Give the server more time to complete the handshake
+  connectionTimeout: 20000, // 20 seconds
+  greetingTimeout: 20000,
+  socketTimeout: 20000,
+  // 👇 Optional but helps bypass strict cloud firewalls
+  tls: {
+    rejectUnauthorized: false 
+  }
 });
 
 export class EmailService {
