@@ -77,28 +77,45 @@ export class TeamDashboardService {
       throw new Error("Unauthorized: Only the team leader can invite members");
     }
 
-    // Check if already invited or already in team to prevent spam
-    const existingInvite = await prisma.teamInvite.findFirst({
-      where: { team_id: teamId, email: inviteeEmail, status: 'pending' }
+    const normalizedEmail = inviteeEmail.toLowerCase();
+
+    // 1. Check if already invited AND pending to prevent spam
+    const existingPendingInvite = await prisma.teamInvite.findFirst({
+      where: { team_id: teamId, email: normalizedEmail, status: 'pending' }
     });
-    if (existingInvite) throw new Error("An invitation is already pending for this email");
+    if (existingPendingInvite) {
+      throw new Error("An invitation is already pending for this email");
+    }
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    const invite = await prisma.teamInvite.create({
-      data: {
+    // 2. THE FIX: Use upsert to cleanly handle re-invites 
+    // This overwrites any old 'accepted' or 'rejected' invite row for this email
+    const invite = await prisma.teamInvite.upsert({
+      where: {
+        team_id_email: { 
+          team_id: teamId, 
+          email: normalizedEmail 
+        }
+      },
+      update: {
+        token: token,
+        expires_at: expiresAt,
+        status: 'pending' // Reset the status for the fresh invite
+      },
+      create: {
         team_id: teamId,
-        email: inviteeEmail.toLowerCase(),
+        email: normalizedEmail,
         token: token,
         expires_at: expiresAt
       }
     });
 
-    // Fire & Forget email (Don't await it so the API responds instantly)
+    // 3. Fire & Forget email (Don't await it so the API responds instantly)
     const magicLink = `${config.FRONTEND_URL}/join-team?token=${token}`;
-    EmailService.sendTeamInvite(inviteeEmail, team.name, magicLink).catch(console.error);
+    EmailService.sendTeamInvite(normalizedEmail, team.name, magicLink).catch(console.error);
 
     return invite;
   }
@@ -169,7 +186,14 @@ export class TeamDashboardService {
 
     const invite = await prisma.teamInvite.findUnique({ 
       where: { token },
-      include: { team: true }
+      include: { 
+        team: {
+          include: {
+            event: { select: { max_team_size: true } },
+            _count: { select: { members: true } }
+          }
+        } 
+      }
     });
 
     // Validations
@@ -182,16 +206,31 @@ export class TeamDashboardService {
       throw new Error("This invite was sent to a different email address. Please log in with the correct account.");
     }
 
+    if (invite.team._count.members >= invite.team.event.max_team_size) {
+      throw new Error(`This team has already reached the maximum limit of ${invite.team.event.max_team_size} members.`);
+    }
+
     // Use a transaction to ensure all database steps succeed together
     return prisma.$transaction(async (tx) => {
       
-      // A. Mark Invite as Accepted [cite: 17]
+      // THE FIX 2: Check if user is already in a DIFFERENT team for this event
+      const existingRegistration = await tx.registration.findFirst({
+        where: { event_id: invite.team.event_id, user_id: userId }
+      });
+
+      if (existingRegistration?.team_id && existingRegistration.team_id !== invite.team_id) {
+        throw new Error("You are already part of another team for this event. You must leave that team first.");
+      }
+
+      // A. Mark Invite as Accepted
       await tx.teamInvite.update({
         where: { id: invite.id },
         data: { status: 'accepted' }
       });
 
-      // B. Add User to the Team [cite: 19]
+      // B. Add User to the Team
+      // Note: If they double-click, Prisma's @@id([team_id, user_id]) constraint will catch it,
+      // but you can wrap this in a try-catch to throw a cleaner error if you want.
       await tx.teamMember.create({
         data: {
           team_id: invite.team_id,
@@ -199,12 +238,7 @@ export class TeamDashboardService {
         }
       });
 
-      // C. Handle Event Registration [cite: 14, 15]
-      // Check if the user is already registered for this event (e.g., they registered solo first)
-      const existingRegistration = await tx.registration.findFirst({
-        where: { event_id: invite.team.event_id, user_id: userId }
-      });
-
+      // C. Handle Event Registration
       if (existingRegistration) {
         // Update existing registration to link to this team 
         await tx.registration.update({

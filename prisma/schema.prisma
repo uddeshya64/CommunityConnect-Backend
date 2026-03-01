@@ -104,7 +104,7 @@ model Event {
   submissions        Submission[]
   mentor_assignments MentorAssignment[]
   announcements      EventAnnouncement[]
-  timelines          EventTimeline[]       // <--- ADDED THIS FIX
+  timelines          EventTimeline[]       
 
   @@map("events")
 }
@@ -118,9 +118,9 @@ model EventUserRole {
   assigned_at          DateTime  @default(now())
 
   // Relationships
-  event Event               @relation(fields: [event_id], references: [id])
-  user  User                @relation(fields: [user_id], references: [id])
-  role  EventRoleDefinition @relation(fields: [role_id], references: [id]) 
+  event Event               @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  user  User                @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  role  EventRoleDefinition @relation(fields: [role_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
 
   @@unique([event_id, user_id]) 
   @@map("event_user_roles")
@@ -135,9 +135,9 @@ model Registration {
   created_at DateTime           @default(now())
 
   // Relationships
-  event      Event     @relation(fields: [event_id], references: [id])
-  user       User      @relation(fields: [user_id], references: [id])
-  team       Team?     @relation(fields: [team_id], references: [id])
+  event      Event     @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  team       Team?     @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
   payments   Payment[]
 
   @@map("registrations")
@@ -168,7 +168,7 @@ model TeamInvite {
   created_at DateTime @default(now())
   expires_at DateTime
 
-  team       Team     @relation(fields: [team_id], references: [id])
+  team       Team     @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
 
   @@unique([team_id, email]) 
   @@map("team_invites")
@@ -184,8 +184,8 @@ model Team {
   updated_at DateTime   @updatedAt
 
   // Relationships
-  event              Event              @relation(fields: [event_id], references: [id])
-  leader             User               @relation("TeamLeader", fields: [leader_id], references: [id])
+  event              Event              @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  leader             User               @relation("TeamLeader", fields: [leader_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
   registrations      Registration[]
   members            TeamMember[]
   submissions        Submission[]
@@ -200,8 +200,8 @@ model TeamMember {
   user_id Int
 
   // Relationships
-  team Team @relation(fields: [team_id], references: [id])
-  user User @relation(fields: [user_id], references: [id])
+  team Team @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
 
   @@id([team_id, user_id]) 
   @@map("team_members")
@@ -217,9 +217,9 @@ model Submission {
   submitted_at DateTime @default(now())
 
   // Relationships
-  event Event @relation(fields: [event_id], references: [id])
-  team  Team  @relation(fields: [team_id], references: [id])
-  user  User  @relation(fields: [user_id], references: [id])
+  event Event @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  team  Team  @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
 
   @@map("submissions")
 }
@@ -230,9 +230,9 @@ model MentorAssignment {
   team_id   Int
 
   // Relationships
-  event  Event @relation(fields: [event_id], references: [id])
-  mentor User  @relation(fields: [mentor_id], references: [id])
-  team   Team  @relation(fields: [team_id], references: [id])
+  event  Event @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  mentor User  @relation(fields: [mentor_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  team   Team  @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
 
   @@id([event_id, mentor_id, team_id]) 
   @@map("mentor_assignments")
@@ -245,7 +245,7 @@ model EventAnnouncement {
   created_at DateTime @default(now())
 
   // Relationships
-  event Event @relation(fields: [event_id], references: [id])
+  event Event @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
 
   @@map("event_announcements")
 }
@@ -258,7 +258,7 @@ model EventRoleDefinition {
   is_system   Boolean  @default(false) 
 
   // Relationships
-  event         Event              @relation(fields: [event_id], references: [id])
+  event         Event              @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
   users         EventUserRole[] 
   staff_invites EventStaffInvite[] 
 
@@ -277,8 +277,8 @@ model EventStaffInvite {
   expires_at DateTime
 
   // Relationships
-  event      Event               @relation(fields: [event_id], references: [id])
-  role       EventRoleDefinition @relation(fields: [role_id], references: [id])
+  event      Event               @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  role       EventRoleDefinition @relation(fields: [role_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
 
   @@unique([event_id, email]) 
   @@map("event_staff_invites")
@@ -296,7 +296,7 @@ model EventTimeline {
   should_notify   Boolean  @default(true)  
   is_notified     Boolean  @default(false) 
 
-  event           Event    @relation(fields: [event_id], references: [id])
+  event           Event    @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
 
   @@map("event_timelines")
 }
