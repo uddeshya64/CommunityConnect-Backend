@@ -22,6 +22,7 @@ export const EventController = {
   async getOne(req: Request, res: Response) {
     try {
       const eventId = Number(req.params.id);
+      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
       // If user is logged in, pass ID to get context. If not, undefined.
       const userId = req.user?.id; 
 
@@ -51,6 +52,7 @@ export const EventController = {
   async update(req: Request, res: Response) {
     try {
       const eventId = Number(req.params.id);
+      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
       const userId = req.user!.id;
       const validatedData = UpdateEventSchema.parse(req.body);
 
@@ -65,6 +67,7 @@ export const EventController = {
   async delete(req: Request, res: Response) {
     try {
       const eventId = Number(req.params.id);
+      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
       const userId = req.user!.id;
 
       await EventService.deleteEvent(eventId, userId);

@@ -20,9 +20,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
     // 3. Security Check: Token Purpose
     // Prevent using a "Password Reset Token" to access Profile
     if (decoded.purpose && decoded.purpose !== 'email_verified' && decoded.purpose !== 'login') {
-       // Note: Adjust 'login' based on what you put in your login payload.
-       // Usually login tokens don't have a 'purpose' field, or it's 'access'.
-       // If your login token payload is just { id: 1 }, this check is optional but good practice.
+       return res.status(403).json({ error: "Forbidden: This token cannot be used for API access" });
     }
 
     // 4. Attach user to request

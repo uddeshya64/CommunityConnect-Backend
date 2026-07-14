@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const UpdateProfileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").optional(),
-  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone format").optional(),
+  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone format").optional().or(z.literal('')),
   
   // Array of strings for skills
   skills: z.array(z.string()).optional(),

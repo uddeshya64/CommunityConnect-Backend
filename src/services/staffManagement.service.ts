@@ -64,9 +64,22 @@ export class EventStaffService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // Valid for 7 days
 
-    // 4. Save to Database
-    const invite = await prisma.eventStaffInvite.create({
-      data: {
+    // 4. Save/Update to Database using Upsert to prevent unique constraint crashes
+    const invite = await prisma.eventStaffInvite.upsert({
+      where: {
+        event_id_email: {
+          event_id: eventId,
+          email: email.toLowerCase()
+        }
+      },
+      update: {
+        role_id: roleId,
+        token: token,
+        status: 'pending',
+        expires_at: expiresAt,
+        created_at: new Date()
+      },
+      create: {
         event_id: eventId,
         email: email.toLowerCase(),
         role_id: roleId,

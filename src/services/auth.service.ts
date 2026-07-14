@@ -80,6 +80,7 @@ export class AuthService {
 
     // ISSUE TOKEN BASED ON CONTEXT
     if (context === 'RESET') {
+      delete otpStore[email]; // Clear it
       return jwt.sign({ id: email, purpose: 'reset_pass' }, config.RESET_TOKEN_SECRET!, { expiresIn: '5m' });
 
     }else {

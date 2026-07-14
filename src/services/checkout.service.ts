@@ -274,7 +274,8 @@ export class CheckoutService {
 
       if (!team || team.registrations.length === 0) throw new Error("Team/Registration not found");
 
-      const leaderRegistration = team.registrations[0];
+      const leaderRegistration = team.registrations.find(r => r.user_id === team.leader_id);
+      if (!leaderRegistration) throw new Error("Leader registration not found");
       const actualAmountPaid = team.event.registration_fee;
 
       // 1. Save Payment Record
