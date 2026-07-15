@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { EventType, EventMode } from '@prisma/client';
+import { EventMode } from '@prisma/client';
 
 // 1. Define the RAW SHAPE (The "Building Blocks")
 const EventBaseObject = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150),
   description: z.string().min(20, "Description must be detailed"),
-  type: z.nativeEnum(EventType),
+  type: z.string().min(2, "Event type must be at least 2 characters").max(50),
   mode: z.nativeEnum(EventMode),
   
   // Use coerce to automatically turn strings into Date objects
