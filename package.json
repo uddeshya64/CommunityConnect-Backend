@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@types/nodemailer": "^7.0.9",
+    "axios": "^1.18.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "crypto-browserify": "^3.12.1",
