@@ -3,6 +3,17 @@ import { EventService } from '../services/event.service';
 import { CreateEventSchema, UpdateEventSchema } from '../validation/event.validation';
 
 export const EventController = {
+
+  // GET /api/events/types
+  async getTypes(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const types = await EventService.getEventTypes(userId);
+      res.json({ success: true, data: types });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
   
   // GET /api/events
   async getFeed(req: Request, res: Response) {

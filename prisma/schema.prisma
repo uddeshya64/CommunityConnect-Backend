@@ -8,12 +8,20 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// --- Enums ---
+// --- Models ---
 
-enum EventType {
-  hackathon
-  workshop
-  meetup
+model EventType {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique @db.VarChar(50)
+  is_system  Boolean  @default(false)
+  created_by Int?
+  created_at DateTime @default(now())
+
+  // Relationships
+  creator    User?    @relation("UserEventTypes", fields: [created_by], references: [id], onDelete: SetNull)
+  events     Event[]
+
+  @@map("event_types")
 }
 
 enum EventMode {
@@ -62,6 +70,7 @@ model User {
 
   // Relationships
   events_created     Event[]            @relation("CreatedEvents")
+  custom_event_types EventType[]        @relation("UserEventTypes")
   event_roles        EventUserRole[]
   registrations      Registration[]
   teams_led          Team[]             @relation("TeamLeader")
@@ -76,7 +85,8 @@ model Event {
   id                 Int                   @id @default(autoincrement())
   title              String                @db.VarChar(150)
   description        String
-  type               EventType
+  type_id            Int
+  type               EventType             @relation(fields: [type_id], references: [id])
   mode               EventMode
   banner_url         String?
   logo_url           String?
