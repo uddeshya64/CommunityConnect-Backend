@@ -12,6 +12,7 @@ import eventRoutes from './routes/event.routes'
 import teamRoutes from './routes/team.routes'
 import teamDashboardRoutes from './routes/teamDashboard.routes';
 import eventStaffRoutes from './routes/staffManagement.routes';
+import locationRoutes from './routes/location.routes';
 import { config } from './config/env';
 
 // Initialize App
@@ -31,8 +32,7 @@ app.use(helmet());
 // Inside your backend's server.ts file
 const allowedOrigins = [
   'http://localhost:3000', 
-  'http://localhost:3001',
-  'http://192.168.29.81:3001', // Your mobile/local testing IP
+  'http://localhost:3001', // Your mobile/local testing IP
   config.FRONTEND_URL    // Your live Vercel URL
 ];
 
@@ -102,6 +102,7 @@ app.use('/api/staff', eventStaffRoutes);
 // Events & Staff Management
 app.use('/api/events', eventRoutes);
 app.use('/api/events/:eventId/staff', eventStaffRoutes); // For organizers
+app.use('/api/locations', locationRoutes); // For location search
 
 
 
