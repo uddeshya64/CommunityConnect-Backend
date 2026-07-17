@@ -158,7 +158,8 @@ export class EventService {
       is_registered: false,
       registration_status: null as string | null,
       team_id: null as number | null,
-      team_name: null as string | null
+      team_name: null as string | null,
+      registration_id: null as number | null
     };
 
     if (userId) {
@@ -189,6 +190,7 @@ export class EventService {
         userContext.registration_status = reg.status; // e.g., 'pending', 'confirmed'
         userContext.team_id = reg.team_id;
         userContext.team_name = reg.team?.name || null;
+        userContext.registration_id = reg.id;
       }
     }
 

@@ -77,6 +77,7 @@ model User {
   team_memberships   TeamMember[]
   submissions        Submission[]
   mentor_assignments MentorAssignment[]
+  performed_scans    Registration[]     @relation("StaffScans")
 
   @@map("users")
 }
@@ -137,18 +138,25 @@ model EventUserRole {
 }
 
 model Registration {
-  id         Int                @id @default(autoincrement())
-  event_id   Int
-  user_id    Int
-  team_id    Int?
-  status     RegistrationStatus
-  created_at DateTime           @default(now())
+  id            Int                @id @default(autoincrement())
+  event_id      Int
+  user_id       Int
+  team_id       Int?
+  status        RegistrationStatus
+  created_at    DateTime           @default(now())
+
+  // Secure Scan Fields
+  ticket_code   String?            @unique
+  checked_in    Boolean            @default(false)
+  checked_in_at DateTime?
+  checked_in_by Int?
 
   // Relationships
-  event      Event     @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  team       Team?     @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  payments   Payment[]
+  event         Event              @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  team          Team?              @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  payments      Payment[]
+  scanner_staff User?              @relation("StaffScans", fields: [checked_in_by], references: [id], onDelete: SetNull)
 
   @@map("registrations")
 }

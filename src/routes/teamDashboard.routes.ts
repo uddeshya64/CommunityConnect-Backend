@@ -34,4 +34,13 @@ router.post('/:id/invite', TeamDashboardController.inviteMember);
 // DELETE /api/teamDashboard/:id/members - Remove a member
 router.delete('/:id/members', TeamDashboardController.removeMember);
 
+// POST /api/teamDashboard/:id/submit - Submit or update project
+router.post('/:id/submit', TeamDashboardController.submitProject);
+
+// DELETE /api/teamDashboard/:id/invites - Revoke an invitation
+router.delete('/:id/invites', TeamDashboardController.revokeInvite);
+
+// POST /api/teamDashboard/:id/leave - Leave the team
+router.post('/:id/leave', TeamDashboardController.leaveTeam);
+
 export default router;

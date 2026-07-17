@@ -32,6 +32,14 @@
     EventStaffController.inviteStaff
   );
 
+  // POST /api/events/:eventId/manage/check-in
+  // Who can do this? Volunteers or staff with MANAGE_ATTENDEES permission
+  router.post('/check-in',
+    authenticate,
+    requirePermission('MANAGE_ATTENDEES'),
+    EventStaffController.checkInParticipant
+  );
+
   // ==========================================
   // GENERAL AUTHENTICATED ROUTES
   // ==========================================

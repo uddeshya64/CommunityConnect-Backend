@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { TeamDashboardService } from '../services/teamDashboard.service';
-import { UpdateTeamNameSchema, RemoveMemberSchema, InviteMemberSchema, AcceptTeamInviteSchema } from '../validation/teamDashboard.validation';
+import { UpdateTeamNameSchema, RemoveMemberSchema, InviteMemberSchema, AcceptTeamInviteSchema, SubmitProjectSchema, RevokeInviteSchema } from '../validation/teamDashboard.validation';
 import { ZodError } from 'zod';
 
 export const TeamDashboardController = {
@@ -86,6 +86,49 @@ export const TeamDashboardController = {
       });
     } catch (error: any) {
       if (error instanceof ZodError) return res.status(400).json({ error: "Validation Error", details: error.issues });
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // 7. SUBMIT PROJECT
+  async submitProject(req: Request, res: Response) {
+    try {
+      const teamId = Number(req.params.id);
+      const userId = req.user!.id;
+      const { title, repoUrl } = SubmitProjectSchema.parse(req.body);
+
+      const submission = await TeamDashboardService.submitProject(teamId, userId, title, repoUrl);
+      res.json({ success: true, message: "Project submitted successfully", data: submission });
+    } catch (error: any) {
+      if (error instanceof ZodError) return res.status(400).json({ error: error.issues });
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // 8. REVOKE INVITATION
+  async revokeInvite(req: Request, res: Response) {
+    try {
+      const teamId = Number(req.params.id);
+      const leaderId = req.user!.id;
+      const { inviteId } = RevokeInviteSchema.parse(req.body);
+
+      await TeamDashboardService.revokeInvite(teamId, leaderId, inviteId);
+      res.json({ success: true, message: "Invitation revoked" });
+    } catch (error: any) {
+      if (error instanceof ZodError) return res.status(400).json({ error: error.issues });
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // 9. LEAVE TEAM
+  async leaveTeam(req: Request, res: Response) {
+    try {
+      const teamId = Number(req.params.id);
+      const userId = req.user!.id;
+
+      await TeamDashboardService.leaveTeam(teamId, userId);
+      res.json({ success: true, message: "You have left the team successfully" });
+    } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   }
