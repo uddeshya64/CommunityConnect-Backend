@@ -13,10 +13,32 @@ export class EventService {
         start_date, end_date, registration_type, registration_fee,
         max_team_size, min_team_size, location, rewards,
       } = data;
+
+      // Find or create the event type (case-insensitive)
+      let eventType = await tx.eventType.findFirst({
+        where: {
+          name: {
+            equals: type,
+            mode: 'insensitive'
+          }
+        }
+      });
+
+      if (!eventType) {
+        eventType = await tx.eventType.create({
+          data: {
+            name: type,
+            is_system: false,
+            created_by: userId
+          }
+        });
+      }
       
       const newEvent = await tx.event.create({
         data: {
-          title, description, type, mode,
+          title, description,
+          type_id: eventType.id,
+          mode,
           banner_url: banner_url ?? undefined,
           logo_url: logo_url ?? undefined,
           start_date: start_date instanceof Date ? start_date : new Date(start_date),
@@ -65,7 +87,10 @@ export class EventService {
         ]
       });
 
-      return newEvent;
+      return {
+        ...newEvent,
+        type
+      };
     });
   }
 
@@ -86,12 +111,23 @@ export class EventService {
       take: limit,
       orderBy: { start_date: 'asc' },
       include: {
-        creator: { select: { id: true, name: true, avatar_url: true } }
+        creator: { select: { id: true, name: true, avatar_url: true } },
+        type: { select: { name: true } }
       }
     });
 
     const total = await prisma.event.count({ where: whereClause });
-    return { events, total, totalPages: Math.ceil(total / limit) };
+    
+    // Map response to keep type as string
+    const formattedEvents = events.map(evt => {
+      const { type, ...rest } = evt;
+      return {
+        ...rest,
+        type: type.name
+      };
+    });
+
+    return { events: formattedEvents, total, totalPages: Math.ceil(total / limit) };
   }
 
   // 3. GET ONE EVENT WITH CONTEXT (UPDATED FOR UNIFIED CONTEXT)
@@ -100,6 +136,7 @@ export class EventService {
       where: { id: eventId },
       include: {
         creator: { select: { id: true, name: true, avatar_url: true } },
+        type: { select: { name: true } },
         user_roles: {
           include: {
             user: { select: { id: true, name: true, email: true, avatar_url: true } },
@@ -121,7 +158,8 @@ export class EventService {
       is_registered: false,
       registration_status: null as string | null,
       team_id: null as number | null,
-      team_name: null as string | null
+      team_name: null as string | null,
+      registration_id: null as number | null
     };
 
     if (userId) {
@@ -152,10 +190,12 @@ export class EventService {
         userContext.registration_status = reg.status; // e.g., 'pending', 'confirmed'
         userContext.team_id = reg.team_id;
         userContext.team_name = reg.team?.name || null;
+        userContext.registration_id = reg.id;
       }
     }
 
-    return { ...event, user_context: userContext };
+    const { type, ...rest } = event;
+    return { ...rest, type: type.name, user_context: userContext };
   }
   
   // 4. UPDATE EVENT
@@ -183,7 +223,42 @@ export class EventService {
       if (!hasManagePermission) throw new Error("Unauthorized: You lack the MANAGE_EVENT permission");
     }
 
-    return prisma.event.update({ where: { id: eventId }, data });
+    const { type, ...updateData } = data;
+    const finalUpdateData: any = { ...updateData };
+
+    if (type) {
+      // Find or create the event type (case-insensitive)
+      let eventType = await prisma.eventType.findFirst({
+        where: {
+          name: {
+            equals: type,
+            mode: 'insensitive'
+          }
+        }
+      });
+
+      if (!eventType) {
+        eventType = await prisma.eventType.create({
+          data: {
+            name: type,
+            is_system: false,
+            created_by: userId
+          }
+        });
+      }
+      finalUpdateData.type_id = eventType.id;
+    }
+
+    const updatedEvent = await prisma.event.update({ 
+      where: { id: eventId }, 
+      data: finalUpdateData,
+      include: {
+        type: { select: { name: true } }
+      }
+    });
+
+    const { type: updatedType, ...rest } = updatedEvent;
+    return { ...rest, type: updatedType.name };
   }
 
   // 5. DELETE EVENT
@@ -193,5 +268,23 @@ export class EventService {
     if (event.created_by !== userId) throw new Error("Only the creator can delete an event");
 
     return prisma.event.delete({ where: { id: eventId } });
+  }
+
+  // 6. GET ALL EVENT TYPES
+  static async getEventTypes(userId?: number) {
+    return prisma.eventType.findMany({
+      where: {
+        OR: [
+          { is_system: true },
+          ...(userId ? [{ created_by: userId }] : [])
+        ]
+      },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        is_system: true
+      }
+    });
   }
 }

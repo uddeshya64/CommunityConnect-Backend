@@ -8,6 +8,7 @@ const router = Router();
 // Public Routes (Feed & Details)
 // Note: apply 'authenticate' optionally to 'getOne' if your middleware supports optional auth, 
 // OR just handle the "no token" case in middleware to not crash but leave req.user undefined.
+router.get('/types', optionalAuthenticate, EventController.getTypes);
 router.get('/', EventController.getFeed);
 router.get('/:id', optionalAuthenticate, EventController.getOne); 
 // ^ If you want guest users to view events, ensure your 'authenticate' middleware 

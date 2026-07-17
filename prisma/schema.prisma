@@ -8,12 +8,20 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// --- Enums ---
+// --- Models ---
 
-enum EventType {
-  hackathon
-  workshop
-  meetup
+model EventType {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique @db.VarChar(50)
+  is_system  Boolean  @default(false)
+  created_by Int?
+  created_at DateTime @default(now())
+
+  // Relationships
+  creator    User?    @relation("UserEventTypes", fields: [created_by], references: [id], onDelete: SetNull)
+  events     Event[]
+
+  @@map("event_types")
 }
 
 enum EventMode {
@@ -62,12 +70,14 @@ model User {
 
   // Relationships
   events_created     Event[]            @relation("CreatedEvents")
+  custom_event_types EventType[]        @relation("UserEventTypes")
   event_roles        EventUserRole[]
   registrations      Registration[]
   teams_led          Team[]             @relation("TeamLeader")
   team_memberships   TeamMember[]
   submissions        Submission[]
   mentor_assignments MentorAssignment[]
+  performed_scans    Registration[]     @relation("StaffScans")
 
   @@map("users")
 }
@@ -76,7 +86,8 @@ model Event {
   id                 Int                   @id @default(autoincrement())
   title              String                @db.VarChar(150)
   description        String
-  type               EventType
+  type_id            Int
+  type               EventType             @relation(fields: [type_id], references: [id])
   mode               EventMode
   banner_url         String?
   logo_url           String?
@@ -127,18 +138,25 @@ model EventUserRole {
 }
 
 model Registration {
-  id         Int                @id @default(autoincrement())
-  event_id   Int
-  user_id    Int
-  team_id    Int?
-  status     RegistrationStatus
-  created_at DateTime           @default(now())
+  id            Int                @id @default(autoincrement())
+  event_id      Int
+  user_id       Int
+  team_id       Int?
+  status        RegistrationStatus
+  created_at    DateTime           @default(now())
+
+  // Secure Scan Fields
+  ticket_code   String?            @unique
+  checked_in    Boolean            @default(false)
+  checked_in_at DateTime?
+  checked_in_by Int?
 
   // Relationships
-  event      Event     @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  team       Team?     @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  payments   Payment[]
+  event         Event              @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  team          Team?              @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  payments      Payment[]
+  scanner_staff User?              @relation("StaffScans", fields: [checked_in_by], references: [id], onDelete: SetNull)
 
   @@map("registrations")
 }
