@@ -82,12 +82,14 @@ export class CheckoutService {
         data: { team_id: team.id, user_id: userId }
       });
 
+      const ticketCode = `cc_tck_${crypto.randomBytes(12).toString('hex')}`;
       const registration = await tx.registration.create({
         data: {
           user_id: userId,
           event_id: eventId,
           team_id: team.id,
-          status: isFree ? 'confirmed' : 'pending'
+          status: isFree ? 'confirmed' : 'pending',
+          ticket_code: ticketCode
         }
       });
 
@@ -161,11 +163,13 @@ export class CheckoutService {
 
     // C. NORMAL FLOW: Create brand new registration
     return prisma.$transaction(async (tx) => {
+      const ticketCode = `cc_tck_${crypto.randomBytes(12).toString('hex')}`;
       const registration = await tx.registration.create({
         data: {
           user_id: userId,
           event_id: eventId,
-          status: isFree ? 'confirmed' : 'pending'
+          status: isFree ? 'confirmed' : 'pending',
+          ticket_code: ticketCode
         }
       });
 

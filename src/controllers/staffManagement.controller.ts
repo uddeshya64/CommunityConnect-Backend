@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { EventStaffService } from '../services/staffManagement.service';
-import { CreateCustomRoleSchema, InviteStaffSchema, AcceptStaffInviteSchema } from '../validation/eventStaff.validation';
+import { CreateCustomRoleSchema, InviteStaffSchema, AcceptStaffInviteSchema, CheckInSchema } from '../validation/eventStaff.validation';
 import { ZodError } from 'zod';
 
 export const EventStaffController = {
@@ -83,7 +83,31 @@ export const EventStaffController = {
       if (error instanceof ZodError) return res.status(400).json({ error: "Validation Error", details: error.issues });
       res.status(400).json({ error: error.message });
     }
+  },
+
+  // 4. CHECK-IN PARTICIPANT
+  async checkInParticipant(req: Request, res: Response) {
+    try {
+      const eventId = Number(req.params.eventId);
+      const staffUserId = req.user!.id;
+      const { ticketCode } = CheckInSchema.parse(req.body);
+
+      const updatedReg = await EventStaffService.checkInParticipant(eventId, staffUserId, ticketCode);
+
+      res.json({
+        success: true,
+        message: `${updatedReg.user.name} checked in successfully!`,
+        data: {
+          id: updatedReg.id,
+          user: updatedReg.user,
+          team: updatedReg.team,
+          checked_in_at: updatedReg.checked_in_at
+        }
+      });
+    } catch (error: any) {
+      if (error instanceof ZodError) return res.status(400).json({ error: "Validation Error", details: error.issues });
+      res.status(400).json({ error: error.message });
+    }
   }
   
 };
-

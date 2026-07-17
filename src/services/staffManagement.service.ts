@@ -161,4 +161,42 @@ export class EventStaffService {
       roleName: invite.role.name
     };
   }
+
+  // 5. SECURE TICKET CHECK-IN
+  static async checkInParticipant(eventId: number, staffUserId: number, ticketCode: string) {
+    const registration = await prisma.registration.findUnique({
+      where: { ticket_code: ticketCode },
+      include: {
+        user: { select: { name: true, email: true } },
+        team: { select: { name: true } }
+      }
+    });
+
+    if (!registration) throw new Error("Ticket not found or invalid.");
+    if (registration.event_id !== eventId) {
+      throw new Error("This ticket is registered for a different event.");
+    }
+    if (registration.status !== 'confirmed') {
+      throw new Error("This registration is not confirmed yet.");
+    }
+    if (registration.checked_in) {
+      const timeString = registration.checked_in_at
+        ? new Date(registration.checked_in_at).toLocaleTimeString()
+        : 'unknown';
+      throw new Error(`Participant has already checked in at ${timeString}.`);
+    }
+
+    return prisma.registration.update({
+      where: { id: registration.id },
+      data: {
+        checked_in: true,
+        checked_in_at: new Date(),
+        checked_in_by: staffUserId
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        team: { select: { id: true, name: true } }
+      }
+    });
+  }
 }

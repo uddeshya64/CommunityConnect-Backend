@@ -17,3 +17,7 @@ export const InviteStaffSchema = z.object({
 export const AcceptStaffInviteSchema = z.object({
   token: z.string().min(10, "Invalid token format"),
 });
+
+export const CheckInSchema = z.object({
+  ticketCode: z.string().min(5, "Invalid ticket code"),
+});
