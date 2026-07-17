@@ -68,7 +68,8 @@ model User {
   updated_at         DateTime           @updatedAt
   fcm_token          String?            @db.Text
 
-  // Relationships
+  // Relations
+  sessions           UserSession[]
   events_created     Event[]            @relation("CreatedEvents")
   custom_event_types EventType[]        @relation("UserEventTypes")
   event_roles        EventUserRole[]
@@ -77,11 +78,22 @@ model User {
   team_memberships   TeamMember[]
   submissions        Submission[]
   mentor_assignments MentorAssignment[]
-  performed_scans    Registration[]     @relation("StaffScans")
 
   @@map("users")
 }
 
+model UserSession {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  refreshToken  String
+  sessionId     String   @unique
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
 model Event {
   id                 Int                   @id @default(autoincrement())
   title              String                @db.VarChar(150)
@@ -138,25 +150,18 @@ model EventUserRole {
 }
 
 model Registration {
-  id            Int                @id @default(autoincrement())
-  event_id      Int
-  user_id       Int
-  team_id       Int?
-  status        RegistrationStatus
-  created_at    DateTime           @default(now())
-
-  // Secure Scan Fields
-  ticket_code   String?            @unique
-  checked_in    Boolean            @default(false)
-  checked_in_at DateTime?
-  checked_in_by Int?
+  id         Int                @id @default(autoincrement())
+  event_id   Int
+  user_id    Int
+  team_id    Int?
+  status     RegistrationStatus
+  created_at DateTime           @default(now())
 
   // Relationships
-  event         Event              @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  team          Team?              @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
-  payments      Payment[]
-  scanner_staff User?              @relation("StaffScans", fields: [checked_in_by], references: [id], onDelete: SetNull)
+  event      Event     @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  team       Team?     @relation(fields: [team_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE
+  payments   Payment[]
 
   @@map("registrations")
 }
