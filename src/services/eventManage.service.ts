@@ -48,6 +48,9 @@ export class EventManageService {
       totalRegistrations,
       totalTeams,
       totalRevenue,
+      total_registrations: totalRegistrations,
+      teams_count: totalTeams,
+      revenue: totalRevenue,
       eventTitle: event.title
     };
   }

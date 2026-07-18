@@ -116,6 +116,7 @@ model Event {
   registration_fee   Decimal
   max_team_size      Int
   min_team_size      Int
+  capacity           Int                   @default(0)
   location           String?
   rewards            Json?                 @default("{}")
   created_at         DateTime              @default(now())

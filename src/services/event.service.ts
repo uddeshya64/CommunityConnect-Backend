@@ -11,7 +11,7 @@ export class EventService {
       const {
         title, description, type, mode, banner_url, logo_url,
         start_date, end_date, registration_type, registration_fee,
-        max_team_size, min_team_size, location, rewards,
+        max_team_size, min_team_size, capacity, location, rewards,
       } = data;
 
       // Find or create the event type (case-insensitive)
@@ -46,6 +46,7 @@ export class EventService {
           registration_type,
           registration_fee: registration_fee ?? 0,
           max_team_size, min_team_size,
+          capacity: capacity ?? 0,
           location: location ?? undefined,
           rewards: rewards ?? undefined,
           created_by: userId,

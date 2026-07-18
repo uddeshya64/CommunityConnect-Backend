@@ -16,6 +16,7 @@ const EventBaseObject = z.object({
   registration_fee: z.number().min(0),
   max_team_size: z.number().min(1),
   min_team_size: z.number().min(1),
+  capacity: z.number().int().nonnegative().default(0),
   
   banner_url: z.string().url().optional(),
   logo_url: z.string().url().optional(),
