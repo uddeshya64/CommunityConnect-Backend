@@ -68,6 +68,13 @@ model User {
   updated_at         DateTime           @updatedAt
   fcm_token          String?            @db.Text
 
+  // Tenant-Level Configuration for Organizers
+  subscription_status String            @default("free")
+  branding_config    Json?              @default("{}")
+  tenant_policy      Json?              @default("{}")
+  security_config    Json?              @default("{}")
+  billing_info       Json?              @default("{}")
+
   // Relations
   sessions           UserSession[]
   events_created     Event[]            @relation("CreatedEvents")
@@ -150,12 +157,16 @@ model EventUserRole {
 }
 
 model Registration {
-  id         Int                @id @default(autoincrement())
-  event_id   Int
-  user_id    Int
-  team_id    Int?
-  status     RegistrationStatus
-  created_at DateTime           @default(now())
+  id            Int                @id @default(autoincrement())
+  event_id      Int
+  user_id       Int
+  team_id       Int?
+  status        RegistrationStatus
+  ticket_code   String?            @unique @db.VarChar(100)
+  checked_in    Boolean            @default(false)
+  checked_in_at DateTime?
+  checked_in_by Int?
+  created_at    DateTime           @default(now())
 
   // Relationships
   event      Event     @relation(fields: [event_id], references: [id], onDelete: Cascade) // REMOVE_IN_PROD: CASCADE

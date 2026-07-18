@@ -123,7 +123,12 @@ export class EventManageService {
         teamId: team?.id || null,
         teamName: team?.name || 'Individual',
         
-        paymentStatus: finalPaymentStatus
+        paymentStatus: finalPaymentStatus,
+
+        // Check-In Details
+        ticketCode: reg.ticket_code,
+        checkedIn: reg.checked_in,
+        checkedInAt: reg.checked_in_at
       };
     });
   }

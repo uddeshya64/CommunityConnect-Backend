@@ -58,30 +58,163 @@ export class EventService {
             event_id: newEvent.id,
             name: "Co-Organizer",
             permissions: [
-              EVENT_PERMISSIONS.MANAGE_EVENT, 
-              EVENT_PERMISSIONS.MANAGE_STAFF, 
-              EVENT_PERMISSIONS.VIEW_DASHBOARD, 
-              EVENT_PERMISSIONS.MANAGE_ATTENDEES, 
-              EVENT_PERMISSIONS.MANAGE_COMMUNICATIONS
+              EVENT_PERMISSIONS.MANAGE_EVENT,
+              EVENT_PERMISSIONS.MANAGE_STAFF,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD,
+              EVENT_PERMISSIONS.MANAGE_ATTENDEES,
+              EVENT_PERMISSIONS.MANAGE_COMMUNICATIONS,
+              EVENT_PERMISSIONS.MANAGE_EVENT_SETUP,
+              EVENT_PERMISSIONS.MANAGE_BUDGET,
+              EVENT_PERMISSIONS.MANAGE_READINESS,
+              EVENT_PERMISSIONS.MANAGE_APPROVALS,
+              EVENT_PERMISSIONS.VIEW_EXECUTIVE_DASHBOARD,
+              EVENT_PERMISSIONS.MANAGE_AGENDA,
+              EVENT_PERMISSIONS.MANAGE_TRACKS,
+              EVENT_PERMISSIONS.MANAGE_SESSIONS,
+              EVENT_PERMISSIONS.MANAGE_SPEAKERS,
+              EVENT_PERMISSIONS.MANAGE_CONTENT,
+              EVENT_PERMISSIONS.MANAGE_ROOMS,
+              EVENT_PERMISSIONS.MANAGE_EQUIPMENT,
+              EVENT_PERMISSIONS.MANAGE_ACCESS,
+              EVENT_PERMISSIONS.MANAGE_QUEUES,
+              EVENT_PERMISSIONS.MANAGE_INCIDENTS,
+              EVENT_PERMISSIONS.MANAGE_ONSITE_STAFF,
+              EVENT_PERMISSIONS.MANAGE_FORMS,
+              EVENT_PERMISSIONS.MANAGE_TICKETS,
+              EVENT_PERMISSIONS.MANAGE_INVITATIONS,
+              EVENT_PERMISSIONS.MANAGE_CHECK_IN,
+              EVENT_PERMISSIONS.MANAGE_REFUNDS,
+              EVENT_PERMISSIONS.MANAGE_CAMPAIGNS,
+              EVENT_PERMISSIONS.MANAGE_REFERRALS,
+              EVENT_PERMISSIONS.MANAGE_SPONSORS,
+              EVENT_PERMISSIONS.MANAGE_BOOTHS,
+              EVENT_PERMISSIONS.MANAGE_SPONSOR_DELIVERABLES,
+              EVENT_PERMISSIONS.VIEW_SPONSOR_ROI
             ],
             is_system: true
           },
           {
             event_id: newEvent.id,
+            name: "Event Director",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_EVENT_SETUP,
+              EVENT_PERMISSIONS.MANAGE_BUDGET,
+              EVENT_PERMISSIONS.MANAGE_READINESS,
+              EVENT_PERMISSIONS.MANAGE_APPROVALS,
+              EVENT_PERMISSIONS.VIEW_EXECUTIVE_DASHBOARD,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Program Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_AGENDA,
+              EVENT_PERMISSIONS.MANAGE_TRACKS,
+              EVENT_PERMISSIONS.MANAGE_SESSIONS,
+              EVENT_PERMISSIONS.MANAGE_SPEAKERS,
+              EVENT_PERMISSIONS.MANAGE_CONTENT,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Venue & Operations Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_ROOMS,
+              EVENT_PERMISSIONS.MANAGE_EQUIPMENT,
+              EVENT_PERMISSIONS.MANAGE_ACCESS,
+              EVENT_PERMISSIONS.MANAGE_QUEUES,
+              EVENT_PERMISSIONS.MANAGE_INCIDENTS,
+              EVENT_PERMISSIONS.MANAGE_ONSITE_STAFF,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Registration Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_FORMS,
+              EVENT_PERMISSIONS.MANAGE_TICKETS,
+              EVENT_PERMISSIONS.MANAGE_INVITATIONS,
+              EVENT_PERMISSIONS.MANAGE_CHECK_IN,
+              EVENT_PERMISSIONS.MANAGE_REFUNDS,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Marketing Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_CAMPAIGNS,
+              EVENT_PERMISSIONS.MANAGE_REFERRALS,
+              EVENT_PERMISSIONS.MANAGE_COMMUNICATIONS,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Sponsor/Exhibitor Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_SPONSORS,
+              EVENT_PERMISSIONS.MANAGE_BOOTHS,
+              EVENT_PERMISSIONS.MANAGE_SPONSOR_DELIVERABLES,
+              EVENT_PERMISSIONS.VIEW_SPONSOR_ROI,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Speaker",
+            permissions: [EVENT_PERMISSIONS.ACCESS_SPEAKER_PORTAL],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
             name: "Judge",
-            permissions: [EVENT_PERMISSIONS.VIEW_DASHBOARD, EVENT_PERMISSIONS.SCORE_SUBMISSIONS],
+            permissions: [
+              EVENT_PERMISSIONS.VIEW_DASHBOARD,
+              EVENT_PERMISSIONS.SCORE_SUBMISSIONS,
+              EVENT_PERMISSIONS.ACCESS_SPEAKER_PORTAL
+            ],
             is_system: true
           },
           {
             event_id: newEvent.id,
             name: "Mentor",
-            permissions: [EVENT_PERMISSIONS.VIEW_DASHBOARD],
+            permissions: [
+              EVENT_PERMISSIONS.VIEW_DASHBOARD,
+              EVENT_PERMISSIONS.ACCESS_SPEAKER_PORTAL
+            ],
             is_system: true
           },
           {
             event_id: newEvent.id,
             name: "Volunteer",
-            permissions: [EVENT_PERMISSIONS.VIEW_DASHBOARD, EVENT_PERMISSIONS.MANAGE_ATTENDEES],
+            permissions: [
+              EVENT_PERMISSIONS.VIEW_DASHBOARD,
+              EVENT_PERMISSIONS.MANAGE_ATTENDEES,
+              EVENT_PERMISSIONS.VIEW_SHIFTS,
+              EVENT_PERMISSIONS.MANAGE_ASSIGNED_TASKS,
+              EVENT_PERMISSIONS.ACKNOWLEDGE_TASKS,
+              EVENT_PERMISSIONS.MANAGE_CHECK_IN
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Auditor/Support Operator",
+            permissions: [
+              EVENT_PERMISSIONS.ACCESS_SUPPORT_PORTAL,
+              EVENT_PERMISSIONS.VIEW_AUDIT_LOGS,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
             is_system: true
           }
         ]
