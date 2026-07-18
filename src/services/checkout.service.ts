@@ -19,6 +19,16 @@ export class CheckoutService {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error("Event not found");
 
+    // Capacity Check
+    if (event.capacity > 0) {
+      const confirmedCount = await prisma.registration.count({
+        where: { event_id: eventId, status: 'confirmed' }
+      });
+      if (confirmedCount >= event.capacity) {
+        throw new Error("This event has reached its maximum participation capacity.");
+      }
+    }
+
     const fee = Number(event.registration_fee);
     const isFree = fee === 0;
 
@@ -125,6 +135,16 @@ export class CheckoutService {
   static async initializeIndividualRegistration(userId: number, eventId: number) {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error("Event not found");
+
+    // Capacity Check
+    if (event.capacity > 0) {
+      const confirmedCount = await prisma.registration.count({
+        where: { event_id: eventId, status: 'confirmed' }
+      });
+      if (confirmedCount >= event.capacity) {
+        throw new Error("This event has reached its maximum participation capacity.");
+      }
+    }
 
     if (event.registration_type !== 'individual' && event.min_team_size > 1) {
       throw new Error("This event requires you to register as a team.");

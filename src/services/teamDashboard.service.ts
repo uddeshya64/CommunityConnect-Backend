@@ -308,7 +308,7 @@ export class TeamDashboardService {
       include: { 
         team: {
           include: {
-            event: { select: { max_team_size: true } },
+            event: { select: { max_team_size: true, capacity: true } },
             _count: { select: { members: true } }
           }
         } 
@@ -327,6 +327,15 @@ export class TeamDashboardService {
 
     if (invite.team._count.members >= invite.team.event.max_team_size) {
       throw new Error(`This team has already reached the maximum limit of ${invite.team.event.max_team_size} members.`);
+    }
+
+    if (invite.team.event.capacity > 0) {
+      const confirmedCount = await prisma.registration.count({
+        where: { event_id: invite.team.event_id, status: 'confirmed' }
+      });
+      if (confirmedCount >= invite.team.event.capacity) {
+        throw new Error("This event has reached its maximum participation capacity. No more members can join.");
+      }
     }
 
     // Use a transaction to ensure all database steps succeed together
