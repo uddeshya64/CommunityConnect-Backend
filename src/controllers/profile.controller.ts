@@ -1,60 +1,120 @@
-import { Request, Response } from 'express';
-import { ProfileService } from '../services/profile.service';
-import { UpdateProfileSchema } from '../validation/profile.validation';
+import { Request, Response } from "express";
+import { ProfileService } from "../services/profile.service";
+import { UpdateProfileSchema } from "../validation/profile.validation";
 
-// Helper to get User ID from the Request (attached by auth middleware)
-// Assuming req.user was populated by your verifyToken middleware
-const getUserId = (req: Request) => {
-  if (!req.user || !req.user.id) throw new Error("Unauthorized");
-  return Number(req.user.id); // Ensure it's a number for Prisma 
+const getUserId = (req: Request): number => {
+
+  if (!req.user) {
+    throw new Error("Unauthorized");
+  }
+
+  return req.user.id;
 };
 
 export const ProfileController = {
 
-  // GET /api/profile
-  async getMyProfile(req: Request, res: Response) {
+  // GET /profile/me
+  async getMyProfile(
+    req: Request,
+    res: Response
+  ) {
+
     try {
-      const userId = getUserId(req);
-      const profile = await ProfileService.getProfile(userId);
-      res.json({ success: true, data: profile });
+
+      const profile =
+        await ProfileService.getProfile(
+          getUserId(req)
+        );
+
+      return res.status(200).json({
+        success: true,
+        data: profile,
+      });
+
     } catch (error: any) {
-      res.status(404).json({ error: error.message });
+
+      return res.status(404).json({
+        success: false,
+        error: error.message,
+      });
+
     }
   },
 
-  // GET /api/profile/:id
-  // (NEW: Allows any authenticated user to see any other profile)
-  async getProfileById(req: Request, res: Response) {
+  // GET /profile/:id
+  async getProfileById(
+    req: Request,
+    res: Response
+  ) {
+
     try {
-      // Get the ID from the URL params instead of the token
-      const targetUserId = Number(req.params.id);
-      
-      if (isNaN(targetUserId)) {
-        return res.status(400).json({ error: "Invalid User ID format" });
+
+      const id = Number(req.params.id);
+
+      if (isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid user id",
+        });
       }
 
-      const profile = await ProfileService.getProfile(targetUserId);
-      res.json({ success: true, data: profile });
+      const profile =
+        await ProfileService.getProfile(id);
+
+      return res.status(200).json({
+        success: true,
+        data: profile,
+      });
+
     } catch (error: any) {
-      res.status(404).json({ error: "Profile not found" });
+
+      return res.status(404).json({
+        success: false,
+        error: error.message,
+      });
+
     }
   },
 
-  // PATCH /api/profile
-  async updateMyProfile(req: Request, res: Response) {
+  // PATCH /profile/me
+  async updateMyProfile(
+    req: Request,
+    res: Response
+  ) {
+
     try {
-      const userId = getUserId(req);
-      
-      // 1. Validate Input
-      const validatedData = UpdateProfileSchema.parse(req.body);
 
-      // 2. Call Service
-      const updatedProfile = await ProfileService.updateProfile(userId, validatedData);
+      const validatedData =
+        UpdateProfileSchema.parse(req.body);
 
-      res.json({ success: true, message: "Profile updated", data: updatedProfile });
+      const profile =
+        await ProfileService.updateProfile(
+          getUserId(req),
+          validatedData
+        );
+
+      return res.status(200).json({
+        success: true,
+        message: "Profile updated successfully",
+        data: profile,
+      });
+
     } catch (error: any) {
-      if (error.issues) return res.status(400).json({ error: "Validation Error", details: error.issues });
-      res.status(500).json({ error: error.message });
+
+      if (error.name === "ZodError") {
+
+        return res.status(400).json({
+          success: false,
+          error: error.errors,
+        });
+
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+
     }
-  }
+  },
 };

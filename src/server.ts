@@ -13,6 +13,7 @@ import teamRoutes from './routes/team.routes'
 import teamDashboardRoutes from './routes/teamDashboard.routes';
 import eventStaffRoutes from './routes/staffManagement.routes';
 import locationRoutes from './routes/location.routes';
+import organizerConfigRoutes from './routes/organizerConfig.routes';
 import { config } from './config/env';
 import imageRoutes from './routes/image';
 // Initialize App
@@ -93,7 +94,7 @@ app.get('/health', (req, res) => {
 
 // Auth & User
 app.use('/api/auth', authRoutes);
-app.use('/api/profile', profileRoutes);
+app.use("/api/profile", profileRoutes);
 
 // Participant Registration (Solo or Team)
 app.use('/api/registration', teamRoutes); 
@@ -117,6 +118,7 @@ app.use('/api/staff', eventStaffRoutes);
 // Events & Staff Management
 app.use('/api/events', eventRoutes);
 app.use('/api/events/:eventId/staff', eventStaffRoutes); // For organizers
+app.use('/api/organizers', organizerConfigRoutes); // For organizer global configs
 app.use('/api/locations', locationRoutes); // For location search
 
 

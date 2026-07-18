@@ -4,7 +4,7 @@ import { EventPermission } from '../utils/constants/permissions';
 
 const prisma = new PrismaClient();
 
-export const requirePermission = (requiredPermission: EventPermission) => {
+export const requirePermission = (requiredPermission: any) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       // 1. Ensure the user is authenticated (relies on your auth.middleware running first)
@@ -13,8 +13,8 @@ export const requirePermission = (requiredPermission: EventPermission) => {
         return res.status(401).json({ error: "Unauthorized: Please log in." });
       }
 
-      // 2. Extract the Event ID from the URL parameters or the request body
-      const eventId = Number(req.params.eventId || req.body.eventId);
+      // 2. Extract the Event ID from the URL parameters, the request body, or query params
+      const eventId = Number(req.params.eventId || req.body.eventId || req.query.eventId);
       if (!eventId) {
         return res.status(400).json({ error: "Event ID is required to check permissions." });
       }
@@ -44,13 +44,16 @@ export const requirePermission = (requiredPermission: EventPermission) => {
       const userOverrides = (staffRecord.permissions_override as string[]) || [];
 
       // 6. Check if they have the specific atomic permission required for this route
-      if (rolePermissions.includes(requiredPermission) || userOverrides.includes(requiredPermission)) {
+      const permissionsToCheck = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
+      const hasAny = permissionsToCheck.some(p => rolePermissions.includes(p) || userOverrides.includes(p));
+
+      if (hasAny) {
         return next(); // Access Granted! Proceed to the Controller.
       }
 
       // 7. If they don't have it, block them.
       return res.status(403).json({ 
-        error: `Access denied. You lack the required permission: '${requiredPermission}'` 
+        error: `Access denied. You lack the required permission: '${permissionsToCheck.join("' or '")}'` 
       });
 
     } catch (error) {
