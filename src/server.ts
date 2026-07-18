@@ -13,6 +13,7 @@ import teamRoutes from './routes/team.routes'
 import teamDashboardRoutes from './routes/teamDashboard.routes';
 import eventStaffRoutes from './routes/staffManagement.routes';
 import locationRoutes from './routes/location.routes';
+import organizerConfigRoutes from './routes/organizerConfig.routes';
 import { config } from './config/env';
 
 // Initialize App
@@ -102,6 +103,7 @@ app.use('/api/staff', eventStaffRoutes);
 // Events & Staff Management
 app.use('/api/events', eventRoutes);
 app.use('/api/events/:eventId/staff', eventStaffRoutes); // For organizers
+app.use('/api/organizers', organizerConfigRoutes); // For organizer global configs
 app.use('/api/locations', locationRoutes); // For location search
 
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { EventController } from '../controllers/event.controller';
 import { authenticate , optionalAuthenticate} from '../middlewares/auth.middleware';
 import {EventManageController} from '../controllers/eventManage.controller'
+import { requirePermission } from '../middlewares/requirePermission.middleware';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get('/:id', optionalAuthenticate, EventController.getOne);
 // doesn't block requests without tokens, or create a specific 'optionalAuth' middleware.
 
 router.get('/:eventId/manage/overview', authenticate, EventManageController.getOverview);
-router.get('/:eventId/manage/participants', authenticate, EventManageController.getParticipants);
+router.get('/:eventId/manage/participants', authenticate, requirePermission(['MANAGE_ATTENDEES', 'MANAGE_CHECK_IN']), EventManageController.getParticipants);
 
 // Protected Routes (Create, Update, Delete)
 router.post('/', authenticate, EventController.create);
