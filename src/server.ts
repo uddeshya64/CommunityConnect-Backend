@@ -78,7 +78,7 @@ app.get('/health', (req, res) => {
 
 // Auth & User
 app.use('/api/auth', authRoutes);
-app.use('/api/profile', profileRoutes);
+app.use("/api/profile", profileRoutes);
 
 // Participant Registration (Solo or Team)
 app.use('/api/registration', teamRoutes); 

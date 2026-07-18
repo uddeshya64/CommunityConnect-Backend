@@ -1,23 +1,68 @@
-import { Router } from 'express';
-import { AuthController } from '../controllers/auth.controller';
-import { authLimiter } from '../middlewares/security'; 
+import { Router } from "express";
+import { AuthController } from "../controllers/auth.controller";
+import { authLimiter } from "../middlewares/security";
+import { authenticate } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-// POST /api/auth/email/init -> Send OTP
-router.post('/registor/init', authLimiter, AuthController.initiateEmailReg);
+// ---------------- Registration ----------------
 
-// POST /api/auth/email/verify -> Verify & Register/Login
-router.post('/registor/verify', authLimiter, AuthController.verifyEmailReg);
+router.post(
+  "/register/init",
+  authLimiter,
+  AuthController.initiateEmailReg
+);
 
-// POST /api/auth/login -> Email/Password Login
-router.post('/login', authLimiter, AuthController.login);   
+router.post(
+  "/register/verify",
+  authLimiter,
+  AuthController.verifyEmailReg
+);
 
-// 3. Final Step for Forgot Password
-router.post('/reset-password',authLimiter, AuthController.resetPassword);
+// ---------------- Login ----------------
 
-// --- Google Auth Route ---
-// POST /api/auth/google -> Secure Google Login
-router.post('/google', AuthController.googleLogin);
+router.post(
+  "/login",
+  authLimiter,
+  AuthController.login
+);
+
+// ---------------- Refresh Token ----------------
+
+router.post(
+  "/refresh",
+  AuthController.refresh
+);
+
+// ---------------- Logout ----------------
+
+router.post(
+  "/logout",
+  authenticate,
+  AuthController.logout
+);
+
+// ---------------- Logout All Devices ----------------
+
+router.post(
+  "/logout-all",
+  authenticate,
+  AuthController.logoutAll
+);
+
+// ---------------- Reset Password ----------------
+
+router.post(
+  "/reset-password",
+  authLimiter,
+  AuthController.resetPassword
+);
+
+// ---------------- Google Login ----------------
+
+router.post(
+  "/google",
+  AuthController.googleLogin
+);
 
 export default router;
