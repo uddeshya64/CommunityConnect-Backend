@@ -86,5 +86,43 @@ export const EventController = {
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
+  },
+
+  // POST /api/events/:eventId/banner
+async uploadBanner(req: Request, res: Response) {
+  try {
+    const eventId = Number(req.params.eventId);
+
+    if (isNaN(eventId)) {
+      return res.status(400).json({
+        error: "Invalid event ID",
+      });
+    }
+
+    const userId = req.user!.id;
+
+    if (!req.file) {
+      return res.status(400).json({
+        error: "Banner image is required",
+      });
+    }
+
+    const updatedEvent = await EventService.uploadBanner(
+      eventId,
+      userId,
+      req.file
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Event banner uploaded successfully",
+      data: updatedEvent,
+    });
+
+  } catch (error: any) {
+    res.status(400).json({
+      error: error.message,
+    });
   }
+}
 };
