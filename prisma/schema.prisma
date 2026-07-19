@@ -101,6 +101,7 @@ model UserSession {
 
   @@map("user_sessions")
 }
+
 model Event {
   id                 Int                   @id @default(autoincrement())
   title              String                @db.VarChar(150)
@@ -119,13 +120,12 @@ model Event {
   capacity           Int                   @default(0)
   location           String?
   rewards            Json?                 @default("{}")
+  custom_fields      Json?                 @default("{}")   // values for template/custom fields
+  custom_form_schema Json?                 @default("[]")   // NEW: field definitions when type = "Custom"
   created_at         DateTime              @default(now())
   updated_at         DateTime              @updatedAt
 
-  // Foreign Key
   created_by         Int
-
-  // Relationships
   creator            User                  @relation("CreatedEvents", fields: [created_by], references: [id], onDelete: Cascade)
   user_roles         EventUserRole[]
   role_definitions   EventRoleDefinition[]
