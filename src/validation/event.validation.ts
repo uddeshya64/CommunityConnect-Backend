@@ -2,26 +2,36 @@ import { z } from 'zod';
 import { EventMode } from '@prisma/client';
 
 // 1. Define the RAW SHAPE (The "Building Blocks")
+// Defines the shape of one custom field the organizer builds
+const CustomFieldDefinition = z.object({
+  id: z.string(),
+  label: z.string().min(1, "Field label is required"),
+  type: z.enum(["text", "textarea", "number", "date", "select", "checkbox", "url", "phone", "email"]),
+  required: z.boolean().default(false),
+  options: z.array(z.string()).optional(), // only used when type === "select"
+});
+
 const EventBaseObject = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(150),
   description: z.string().min(20, "Description must be detailed"),
   type: z.string().min(2, "Event type must be at least 2 characters").max(50),
   mode: z.nativeEnum(EventMode),
-  
-  // Use coerce to automatically turn strings into Date objects
+
   start_date: z.coerce.date(),
   end_date: z.coerce.date(),
-  
+
   registration_type: z.string(),
   registration_fee: z.number().min(0),
   max_team_size: z.number().min(1),
   min_team_size: z.number().min(1),
   capacity: z.number().int().nonnegative().default(0),
-  
+
   banner_url: z.string().url().optional(),
   logo_url: z.string().url().optional(),
   rewards: z.any().optional(),
-  
+  custom_fields: z.record(z.string(), z.any()).optional(),
+  custom_form_schema: z.array(CustomFieldDefinition).optional(), // NEW
+
   location: z.string().optional(),
 });
 
