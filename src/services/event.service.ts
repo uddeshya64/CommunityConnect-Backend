@@ -92,6 +92,7 @@ export class EventService {
         title, description, type, mode, banner_url, logo_url,
         start_date, end_date, registration_type, registration_fee,
         max_team_size, min_team_size, capacity, location, rewards,
+         custom_fields, custom_form_schema,  // NEW: template-specific fields (speakers, prizes, RSVP deadline, etc.)
       } = data;
 
       // Find or create the event type (case-insensitive)
@@ -129,6 +130,8 @@ export class EventService {
           capacity: capacity ?? 0,
           location: location ?? undefined,
           rewards: rewards ?? undefined,
+          custom_fields: custom_fields ?? undefined, // NEW
+          custom_form_schema: custom_form_schema ?? undefined,
           created_by: userId,
         }
       });
@@ -439,6 +442,9 @@ export class EventService {
 
     const { type, ...updateData } = data;
     const finalUpdateData: any = { ...updateData };
+
+    // NOTE: custom_fields is passed through automatically via ...updateData above
+    // since it is now part of UpdateEventSchema. No extra handling needed here.
 
     if (type) {
       // Find or create the event type (case-insensitive)
