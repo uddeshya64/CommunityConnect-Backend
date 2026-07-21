@@ -204,10 +204,11 @@ export class AuthService {
       throw new Error("Invalid email or password");
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      user.password_hash
-    );
+    if (!user.password_hash) {
+      throw new Error("Invalid email or password");
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
       throw new Error("Invalid email or password");

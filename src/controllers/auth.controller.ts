@@ -245,7 +245,7 @@ async logout(
   try {
 
     await SessionService.logout(
-      req.user.sessionId
+    req.user.sessionId
     );
 
     return res.status(200).json({
@@ -271,6 +271,7 @@ async logoutAll(
 
   try {
 
+    
     await SessionService.logoutAll(
       req.user.id
     );
