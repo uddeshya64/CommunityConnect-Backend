@@ -15,7 +15,7 @@ import eventStaffRoutes from './routes/staffManagement.routes';
 import locationRoutes from './routes/location.routes';
 import organizerConfigRoutes from './routes/organizerConfig.routes';
 import { config } from './config/env';
-
+import imageRoutes from './routes/image';
 // Initialize App
 const app = express();
 const prisma = new PrismaClient();
@@ -33,7 +33,12 @@ app.use(helmet());
 // Inside your backend's server.ts file
 const allowedOrigins = [
   'http://localhost:3000', 
+
   'http://localhost:3001', // Your mobile/local testing IP
+
+  'http://localhost:3001',
+  'http://192.168.20.39:3001',// Your mobile/local testing IP
+
   config.FRONTEND_URL    // Your live Vercel URL
 ];
 
@@ -72,6 +77,16 @@ app.use('/api', globalLimiter);*/
 // 2. ROUTE MOUNTING
 // =========================================
 
+app.use(express.json({ limit: '10kb' }));
+
+app.use((req, res, next) => {
+    console.log("Incoming request:", req.method, req.url);
+    next();
+});
+
+
+
+
 // Health Check
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'UP', timestamp: new Date() });
@@ -107,6 +122,8 @@ app.use('/api/organizers', organizerConfigRoutes); // For organizer global confi
 app.use('/api/locations', locationRoutes); // For location search
 
 
+// Image Upload
+app.use('/api/image', imageRoutes);
 
 
 // =========================================

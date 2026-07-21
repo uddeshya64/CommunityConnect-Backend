@@ -1,10 +1,90 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { EVENT_PERMISSIONS } from '../utils/constants/permissions';
 
+
+
+import supabase from "../config/supabase";
+
 const prisma = new PrismaClient();
 
 export class EventService {
-  
+
+  // Post event Banner
+
+  static async uploadBanner(
+  eventId: number,
+  userId: number,
+  file: Express.Multer.File
+) {
+    // Check if event exists
+    const event = await prisma.event.findUnique({
+      where: {
+        id: eventId,
+      },
+    });
+
+    if (!event) {
+      throw new Error("Event not found");
+    }
+
+    // Check event ownership
+    if (event.created_by !== Number(userId)) {
+      throw new Error(
+        "You are not authorized to update this event"
+      );
+    }
+
+    // Create unique file name
+    const fileName =
+      `event-banners/${eventId}-${Date.now()}-${file.originalname}`;
+
+    // Upload image to Supabase
+    const { error: uploadError } =
+      await supabase.storage
+        .from("image-bucket")
+        .upload(
+          fileName,
+          file.buffer,
+          {
+            contentType: file.mimetype,
+            upsert: false,
+          }
+        );
+
+    if (uploadError) {
+      throw new Error(
+        `Failed to upload banner image: ${uploadError.message}`
+      );
+    }
+
+    // Get public URL
+    const { data: publicUrlData } =
+      supabase.storage
+        .from("image-bucket")
+        .getPublicUrl(fileName);
+
+    const bannerURL =
+      publicUrlData.publicUrl;
+
+    // Save URL in Event.banner_url
+    const updatedEvent =
+      await prisma.event.update({
+        where: {
+          id: eventId,
+        },
+        data: {
+          banner_url: bannerURL,
+        },
+        select: {
+          id: true,
+          title: true,
+          banner_url: true,
+        },
+      });
+
+    return updatedEvent;
+  }
+
   // 1. POST EVENT
   static async createEvent(userId: number, data: any) {
     return prisma.$transaction(async (tx) => {
@@ -34,7 +114,7 @@ export class EventService {
           }
         });
       }
-      
+
       const newEvent = await tx.event.create({
         data: {
           title, description,
@@ -234,7 +314,7 @@ export class EventService {
   // 2. GET ALL EVENTS
   static async getAllEvents(page = 1, limit = 10, search?: string) {
     const skip = (page - 1) * limit;
-    
+
     const whereClause: Prisma.EventWhereInput = search ? {
       OR: [
         { title: { contains: search, mode: 'insensitive' } },
@@ -254,7 +334,7 @@ export class EventService {
     });
 
     const total = await prisma.event.count({ where: whereClause });
-    
+
     // Map response to keep type as string
     const formattedEvents = events.map(evt => {
       const { type, ...rest } = evt;
@@ -281,7 +361,7 @@ export class EventService {
           }
         },
         role_definitions: { select: { id: true, name: true, permissions: true } },
-        _count: { select: { registrations: true } } 
+        _count: { select: { registrations: true } }
       }
     });
 
@@ -310,7 +390,7 @@ export class EventService {
       });
 
       if (staffRole) {
-        userContext.role = staffRole.role.name; 
+        userContext.role = staffRole.role.name;
         const basePermissions = (staffRole.role.permissions as string[]) || [];
         const overrides = (staffRole.permissions_override as string[]) || [];
         userContext.permissions = Array.from(new Set([...basePermissions, ...overrides]));
@@ -334,7 +414,7 @@ export class EventService {
     const { type, ...rest } = event;
     return { ...rest, type: type.name, user_context: userContext };
   }
-  
+
   // 4. UPDATE EVENT
   static async updateEvent(eventId: number, userId: number, data: any) {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
@@ -345,7 +425,7 @@ export class EventService {
     if (!isCreator) {
       const staffRole = await prisma.eventUserRole.findUnique({
         where: { event_id_user_id: { event_id: eventId, user_id: userId } },
-        include: { role: true } 
+        include: { role: true }
       });
 
       if (!staffRole) throw new Error("Unauthorized: You are not staff for this event");
@@ -353,8 +433,8 @@ export class EventService {
       const rolePermissions = (staffRole.role.permissions as string[]) || [];
       const overrides = (staffRole.permissions_override as string[]) || [];
 
-      const hasManagePermission = 
-        rolePermissions.includes(EVENT_PERMISSIONS.MANAGE_EVENT) || 
+      const hasManagePermission =
+        rolePermissions.includes(EVENT_PERMISSIONS.MANAGE_EVENT) ||
         overrides.includes(EVENT_PERMISSIONS.MANAGE_EVENT);
 
       if (!hasManagePermission) throw new Error("Unauthorized: You lack the MANAGE_EVENT permission");
@@ -389,8 +469,8 @@ export class EventService {
       finalUpdateData.type_id = eventType.id;
     }
 
-    const updatedEvent = await prisma.event.update({ 
-      where: { id: eventId }, 
+    const updatedEvent = await prisma.event.update({
+      where: { id: eventId },
       data: finalUpdateData,
       include: {
         type: { select: { name: true } }
