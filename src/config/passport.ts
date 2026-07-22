@@ -1,20 +1,18 @@
 import passport from "passport";
-import "dotenv/config";
 import {
   Strategy as GoogleStrategy,
   Profile,
 } from "passport-google-oauth20";
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "./prisma";
+import config from "./config";
 
 passport.use(
   new GoogleStrategy(
     {
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL!,
+      clientID: config.GOOGLE_CLIENT_ID,
+      clientSecret: config.GOOGLE_CLIENT_SECRET,
+      callbackURL: config.GOOGLE_CALLBACK_URL,
     },
 
     async (
@@ -24,139 +22,83 @@ passport.use(
       done: (error: any, user?: any) => void
     ) => {
       try {
+        const email =
+          profile.emails?.[0]?.value;
 
-        // Get Google email
-        const email = profile.emails?.[0]?.value;
+        const googleId = profile.id;
+
+        const name =
+          profile.displayName ||
+          "Google User";
+
+        const avatarUrl =
+          profile.photos?.[0]?.value ||
+          null;
 
         if (!email) {
           return done(
-            new Error("Google account does not have an email")
+            new Error(
+              "Google account does not have an email address"
+            )
           );
         }
 
-
-        // Google unique ID
-        const google_id = profile.id;
-
-
-        // Google user name
-        const name = profile.displayName;
-
-
-        // Google profile image
-        const avatar_url =
-          profile.photos?.[0]?.value || null;
-
-
-
-        // 1. Check user using Google ID
+        // Check if user already exists
         let user = await prisma.user.findUnique({
           where: {
-            google_id,
-          },
-        });
-
-
-
-        // 2. If Google account not found,
-        // check existing account using email
-        if (!user) {
-
-          user = await prisma.user.findUnique({
-            where: {
-              email,
-            },
-          });
-
-        }
-
-
-
-        // 3. Existing user login
-        if (user) {
-
-
-          // Existing email account
-          // connect Google account
-          if (!user.google_id) {
-
-
-            user = await prisma.user.update({
-
-              where: {
-                id: user.id,
-              },
-
-              data: {
-
-                google_id,
-
-                avatar_url:
-                  user.avatar_url || avatar_url,
-
-              },
-
-            });
-
-          }
-
-
-          return done(null, user);
-
-        }
-
-
-
-
-
-        // 4. New Google user registration
-        const newUser = await prisma.user.create({
-
-          data: {
-
-            name,
-
             email,
-
-            google_id,
-
-            avatar_url,
-
-
-            // Google users don't have password
-            password_hash: null,
-
-
-            // Required because your schema has:
-            // skills String[]
-            skills: [],
-
           },
-
         });
 
+       if (user) {
+
+  // Link Google account if google_id is missing
+  // Do not update existing profile avatar
+  if (!user.google_id) {
+
+    user = await prisma.user.update({
+
+      where: {
+        id: user.id,
+      },
+
+      data: {
+        google_id: googleId,
+      },
+
+    });
+
+  }
 
 
-        return done(null, newUser);
+  return done(null, user);
 
+}
 
+        // Create new Google user
+        user = await prisma.user.create({
+          data: {
+            name,
+            email,
+            google_id: googleId,
+            avatar_url: null,
 
+            // Google users don't need password
+            password_hash: null,
+          },
+        });
+
+        return done(null, user);
       } catch (error) {
-
         console.error(
           "Google OAuth Error:",
           error
         );
 
         return done(error);
-
       }
-
     }
-
   )
 );
-
-
 
 export default passport;

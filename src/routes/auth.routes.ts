@@ -2,6 +2,7 @@ import { Router } from "express";
 import { AuthController } from "../controllers/auth.controller";
 import { authLimiter } from "../middlewares/security";
 import { authenticate } from "../middlewares/auth.middleware";
+import passport from "passport";
 
 const router = Router();
 
@@ -58,11 +59,52 @@ router.post(
   AuthController.resetPassword
 );
 
-// ---------------- Google Login ----------------
 
-router.post(
+// =====================================================
+// GOOGLE OAUTH
+// =====================================================
+
+// Step 1:
+// Frontend redirects here
+//
+// GET /api/auth/google
+
+router.get(
   "/google",
+  passport.authenticate("google", {
+    scope: [
+      "profile",
+      "email",
+    ],
+    session: false,
+  })
+);
+
+// Step 2:
+// Google redirects here after login
+//
+// GET /api/auth/google/callback
+
+router.get(
+  "/google/callback",
+  passport.authenticate("google", {
+    session: false,
+    failureRedirect:
+      "/api/auth/google/failure",
+  }),
   AuthController.googleLogin
+);
+
+// Google OAuth failure
+router.get(
+  "/google/failure",
+  (req, res) => {
+    res.status(401).json({
+      success: false,
+      message:
+        "Google authentication failed",
+    });
+  }
 );
 
 export default router;
