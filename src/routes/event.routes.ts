@@ -24,7 +24,12 @@ router.get('/:eventId/manage/participants', authenticate, requirePermission(['MA
 
 // Protected Routes (Create, Update, Delete)
 router.post('/', authenticate, EventController.create);
-router.patch('/:id', authenticate, EventController.update);
+router.patch(
+  '/:id',
+  authenticate,
+  upload.none(),
+  EventController.update
+);
 router.delete('/:id', authenticate, EventController.delete);
 
 export default router;
