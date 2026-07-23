@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { config } from '../config/env';
+import { EmailService } from './email.service';
 
 const prisma = new PrismaClient();
 
@@ -18,6 +19,16 @@ export class CheckoutService {
   static async initializeTeamRegistration(userId: number, eventId: number, teamName: string) {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error("Event not found");
+
+    // Capacity Check
+    if (event.capacity > 0) {
+      const confirmedCount = await prisma.registration.count({
+        where: { event_id: eventId, status: 'confirmed' }
+      });
+      if (confirmedCount >= event.capacity) {
+        throw new Error("This event has reached its maximum participation capacity.");
+      }
+    }
 
     const fee = Number(event.registration_fee);
     const isFree = fee === 0;
@@ -50,6 +61,9 @@ export class CheckoutService {
           // Edge case: It was pending, but now it's free. Confirm it.
           await prisma.registration.update({ where: { id: existingRegistration.id }, data: { status: 'confirmed' } });
           await prisma.team.update({ where: { id: existingRegistration.team.id }, data: { status: 'active' } });
+          EmailService.sendRegistrationConfirmationEmail(existingRegistration.id).catch(err => 
+            console.error(`[EMAIL_ERROR] Failed to send email for registration ${existingRegistration.id}:`, err)
+          );
           return { isFree: true, team: existingRegistration.team, registration: existingRegistration };
         }
 
@@ -68,7 +82,7 @@ export class CheckoutService {
     }
 
     // C. NORMAL FLOW: If no registration exists at all, create a brand new one
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const team = await tx.team.create({
         data: {
           name: teamName,
@@ -116,6 +130,14 @@ export class CheckoutService {
 
       return { isFree: false, team, registration, order };
     });
+
+    if (result.isFree && result.registration.status === 'confirmed') {
+      EmailService.sendRegistrationConfirmationEmail(result.registration.id).catch(err => 
+        console.error(`[EMAIL_ERROR] Failed to send email for registration ${result.registration.id}:`, err)
+      );
+    }
+
+    return result;
   }
 
 
@@ -125,6 +147,16 @@ export class CheckoutService {
   static async initializeIndividualRegistration(userId: number, eventId: number) {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error("Event not found");
+
+    // Capacity Check
+    if (event.capacity > 0) {
+      const confirmedCount = await prisma.registration.count({
+        where: { event_id: eventId, status: 'confirmed' }
+      });
+      if (confirmedCount >= event.capacity) {
+        throw new Error("This event has reached its maximum participation capacity.");
+      }
+    }
 
     if (event.registration_type !== 'individual' && event.min_team_size > 1) {
       throw new Error("This event requires you to register as a team.");
@@ -147,6 +179,9 @@ export class CheckoutService {
       if (existingRegistration.status === 'pending') {
         if (isFree) {
           await prisma.registration.update({ where: { id: existingRegistration.id }, data: { status: 'confirmed' } });
+          EmailService.sendRegistrationConfirmationEmail(existingRegistration.id).catch(err => 
+            console.error(`[EMAIL_ERROR] Failed to send email for registration ${existingRegistration.id}:`, err)
+          );
           return { isFree: true, registration: existingRegistration };
         }
 
@@ -162,7 +197,7 @@ export class CheckoutService {
     }
 
     // C. NORMAL FLOW: Create brand new registration
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const ticketCode = `cc_tck_${crypto.randomBytes(12).toString('hex')}`;
       const registration = await tx.registration.create({
         data: {
@@ -196,6 +231,14 @@ export class CheckoutService {
 
       return { isFree: false, registration, order };
     });
+
+    if (result.isFree && result.registration.status === 'confirmed') {
+      EmailService.sendRegistrationConfirmationEmail(result.registration.id).catch(err => 
+        console.error(`[EMAIL_ERROR] Failed to send email for registration ${result.registration.id}:`, err)
+      );
+    }
+
+    return result;
   } 
 
   // 2. VERIFY INDIVIDUAL PAYMENT
@@ -217,7 +260,7 @@ export class CheckoutService {
     }
 
     // B. If valid, update database
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const registration = await tx.registration.findUnique({ 
         where: { id: registrationId },
         include: { event: true }
@@ -245,6 +288,12 @@ export class CheckoutService {
 
       return { success: true, registrationId: registration.id };
     });
+
+    EmailService.sendRegistrationConfirmationEmail(result.registrationId).catch(err => 
+      console.error(`[EMAIL_ERROR] Failed to send email for registration ${result.registrationId}:`, err)
+    );
+
+    return { success: result.success, registrationId: result.registrationId };
   }
   // 2. VERIFY SECURE SIGNATURE & ACTIVATE TEAM
   static async verifyTeamPayment(
@@ -265,7 +314,7 @@ export class CheckoutService {
     }
 
     // B. If valid, update database
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Find the pending registration for this team's leader
       const team = await tx.team.findUnique({ 
         where: { id: teamId },
@@ -306,7 +355,13 @@ export class CheckoutService {
         data: { status: 'confirmed' }
       });
 
-      return { success: true, teamId: teamId };
+      return { success: true, teamId: teamId, registrationId: leaderRegistration.id };
     });
+
+    EmailService.sendRegistrationConfirmationEmail(result.registrationId).catch(err => 
+      console.error(`[EMAIL_ERROR] Failed to send email for registration ${result.registrationId}:`, err)
+    );
+
+    return { success: result.success, teamId: result.teamId };
   }
 }

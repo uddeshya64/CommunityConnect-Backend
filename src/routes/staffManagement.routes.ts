@@ -33,10 +33,10 @@
   );
 
   // POST /api/events/:eventId/manage/check-in
-  // Who can do this? Volunteers or staff with MANAGE_ATTENDEES permission
+  // Who can do this? Volunteers or staff with MANAGE_ATTENDEES or MANAGE_CHECK_IN permission
   router.post('/check-in',
     authenticate,
-    requirePermission('MANAGE_ATTENDEES'),
+    requirePermission(['MANAGE_ATTENDEES', 'MANAGE_CHECK_IN']),
     EventStaffController.checkInParticipant
   );
 

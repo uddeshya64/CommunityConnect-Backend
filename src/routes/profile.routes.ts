@@ -1,20 +1,28 @@
-import { Router } from 'express';
-import { ProfileController } from '../controllers/profile.controller';
-import { authenticate } from '../middlewares/auth.middleware'; // Your JWT check
-import { authLimiter } from '../middlewares/security'; 
+import { Router } from "express";
+import { ProfileController } from "../controllers/profile.controller";
+import { authenticate } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-// Apply 'authenticate' middleware to all routes in this file
-// This ensures req.user.id exists
-router.use(authenticate);
+// Logged in user's profile
+router.get(
+  "/me",
+  authenticate,
+  ProfileController.getMyProfile
+);
 
-// GET /api/profile
-router.get('/me', authenticate, ProfileController.getMyProfile);
+// Update own profile
+router.patch(
+  "/me",
+  authenticate,
+  ProfileController.updateMyProfile
+);
 
-router.get('/:id', authenticate, ProfileController.getProfileById);
-
-// PATCH /api/profile
-router.patch('/', authenticate, authLimiter, ProfileController.updateMyProfile);
+// Public profile by id
+router.get(
+  "/:id",
+  authenticate,
+  ProfileController.getProfileById
+);
 
 export default router;

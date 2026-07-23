@@ -308,7 +308,7 @@ export class TeamDashboardService {
       include: { 
         team: {
           include: {
-            event: { select: { max_team_size: true } },
+            event: { select: { max_team_size: true, capacity: true } },
             _count: { select: { members: true } }
           }
         } 
@@ -329,8 +329,17 @@ export class TeamDashboardService {
       throw new Error(`This team has already reached the maximum limit of ${invite.team.event.max_team_size} members.`);
     }
 
+    if (invite.team.event.capacity > 0) {
+      const confirmedCount = await prisma.registration.count({
+        where: { event_id: invite.team.event_id, status: 'confirmed' }
+      });
+      if (confirmedCount >= invite.team.event.capacity) {
+        throw new Error("This event has reached its maximum participation capacity. No more members can join.");
+      }
+    }
+
     // Use a transaction to ensure all database steps succeed together
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       
       // THE FIX 2: Check if user is already in a DIFFERENT team for this event
       const existingRegistration = await tx.registration.findFirst({
@@ -358,16 +367,18 @@ export class TeamDashboardService {
       });
 
       // C. Handle Event Registration
+      let registrationId: number;
       if (existingRegistration) {
         // Update existing registration to link to this team 
-        await tx.registration.update({
+        const updatedReg = await tx.registration.update({
           where: { id: existingRegistration.id },
           data: { team_id: invite.team_id, status: 'confirmed' }
         });
+        registrationId = updatedReg.id;
       } else {
         // Create a brand new registration for the event 
         const ticketCode = `cc_tck_${crypto.randomBytes(12).toString('hex')}`;
-        await tx.registration.create({
+        const newReg = await tx.registration.create({
           data: {
             event_id: invite.team.event_id,
             user_id: userId,
@@ -376,14 +387,26 @@ export class TeamDashboardService {
             ticket_code: ticketCode
           }
         });
+        registrationId = newReg.id;
       }
 
       return { 
         success: true, 
         teamId: invite.team_id, 
-        teamName: invite.team.name 
+        teamName: invite.team.name,
+        registrationId
       };
     });
+
+    EmailService.sendRegistrationConfirmationEmail(result.registrationId).catch(err => 
+      console.error(`[EMAIL_ERROR] Failed to send email for registration ${result.registrationId}:`, err)
+    );
+
+    return { 
+      success: result.success, 
+      teamId: result.teamId, 
+      teamName: result.teamName 
+    };
   }
 
   // 7. SUBMIT / UPDATE PROJECT

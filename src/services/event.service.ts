@@ -1,17 +1,98 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { EVENT_PERMISSIONS } from '../utils/constants/permissions';
 
+
+
+import supabase from "../config/supabase";
+
 const prisma = new PrismaClient();
 
 export class EventService {
-  
+
+  // Post event Banner
+
+  static async uploadBanner(
+  eventId: number,
+  userId: number,
+  file: Express.Multer.File
+) {
+    // Check if event exists
+    const event = await prisma.event.findUnique({
+      where: {
+        id: eventId,
+      },
+    });
+
+    if (!event) {
+      throw new Error("Event not found");
+    }
+
+    // Check event ownership
+    if (event.created_by !== Number(userId)) {
+      throw new Error(
+        "You are not authorized to update this event"
+      );
+    }
+
+    // Create unique file name
+    const fileName =
+      `event-banners/${eventId}-${Date.now()}-${file.originalname}`;
+
+    // Upload image to Supabase
+    const { error: uploadError } =
+      await supabase.storage
+        .from("image-bucket")
+        .upload(
+          fileName,
+          file.buffer,
+          {
+            contentType: file.mimetype,
+            upsert: false,
+          }
+        );
+
+    if (uploadError) {
+      throw new Error(
+        `Failed to upload banner image: ${uploadError.message}`
+      );
+    }
+
+    // Get public URL
+    const { data: publicUrlData } =
+      supabase.storage
+        .from("image-bucket")
+        .getPublicUrl(fileName);
+
+    const bannerURL =
+      publicUrlData.publicUrl;
+
+    // Save URL in Event.banner_url
+    const updatedEvent =
+      await prisma.event.update({
+        where: {
+          id: eventId,
+        },
+        data: {
+          banner_url: bannerURL,
+        },
+        select: {
+          id: true,
+          title: true,
+          banner_url: true,
+        },
+      });
+
+    return updatedEvent;
+  }
+
   // 1. POST EVENT
   static async createEvent(userId: number, data: any) {
     return prisma.$transaction(async (tx) => {
       const {
         title, description, type, mode, banner_url, logo_url,
         start_date, end_date, registration_type, registration_fee,
-        max_team_size, min_team_size, location, rewards,
+        max_team_size, min_team_size, capacity, location, rewards,
+         custom_fields, custom_form_schema,  // NEW: template-specific fields (speakers, prizes, RSVP deadline, etc.)
       } = data;
 
       // Find or create the event type (case-insensitive)
@@ -33,7 +114,7 @@ export class EventService {
           }
         });
       }
-      
+
       const newEvent = await tx.event.create({
         data: {
           title, description,
@@ -46,8 +127,11 @@ export class EventService {
           registration_type,
           registration_fee: registration_fee ?? 0,
           max_team_size, min_team_size,
+          capacity: capacity ?? 0,
           location: location ?? undefined,
           rewards: rewards ?? undefined,
+          custom_fields: custom_fields ?? undefined, // NEW
+          custom_form_schema: custom_form_schema ?? undefined,
           created_by: userId,
         }
       });
@@ -58,30 +142,163 @@ export class EventService {
             event_id: newEvent.id,
             name: "Co-Organizer",
             permissions: [
-              EVENT_PERMISSIONS.MANAGE_EVENT, 
-              EVENT_PERMISSIONS.MANAGE_STAFF, 
-              EVENT_PERMISSIONS.VIEW_DASHBOARD, 
-              EVENT_PERMISSIONS.MANAGE_ATTENDEES, 
-              EVENT_PERMISSIONS.MANAGE_COMMUNICATIONS
+              EVENT_PERMISSIONS.MANAGE_EVENT,
+              EVENT_PERMISSIONS.MANAGE_STAFF,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD,
+              EVENT_PERMISSIONS.MANAGE_ATTENDEES,
+              EVENT_PERMISSIONS.MANAGE_COMMUNICATIONS,
+              EVENT_PERMISSIONS.MANAGE_EVENT_SETUP,
+              EVENT_PERMISSIONS.MANAGE_BUDGET,
+              EVENT_PERMISSIONS.MANAGE_READINESS,
+              EVENT_PERMISSIONS.MANAGE_APPROVALS,
+              EVENT_PERMISSIONS.VIEW_EXECUTIVE_DASHBOARD,
+              EVENT_PERMISSIONS.MANAGE_AGENDA,
+              EVENT_PERMISSIONS.MANAGE_TRACKS,
+              EVENT_PERMISSIONS.MANAGE_SESSIONS,
+              EVENT_PERMISSIONS.MANAGE_SPEAKERS,
+              EVENT_PERMISSIONS.MANAGE_CONTENT,
+              EVENT_PERMISSIONS.MANAGE_ROOMS,
+              EVENT_PERMISSIONS.MANAGE_EQUIPMENT,
+              EVENT_PERMISSIONS.MANAGE_ACCESS,
+              EVENT_PERMISSIONS.MANAGE_QUEUES,
+              EVENT_PERMISSIONS.MANAGE_INCIDENTS,
+              EVENT_PERMISSIONS.MANAGE_ONSITE_STAFF,
+              EVENT_PERMISSIONS.MANAGE_FORMS,
+              EVENT_PERMISSIONS.MANAGE_TICKETS,
+              EVENT_PERMISSIONS.MANAGE_INVITATIONS,
+              EVENT_PERMISSIONS.MANAGE_CHECK_IN,
+              EVENT_PERMISSIONS.MANAGE_REFUNDS,
+              EVENT_PERMISSIONS.MANAGE_CAMPAIGNS,
+              EVENT_PERMISSIONS.MANAGE_REFERRALS,
+              EVENT_PERMISSIONS.MANAGE_SPONSORS,
+              EVENT_PERMISSIONS.MANAGE_BOOTHS,
+              EVENT_PERMISSIONS.MANAGE_SPONSOR_DELIVERABLES,
+              EVENT_PERMISSIONS.VIEW_SPONSOR_ROI
             ],
             is_system: true
           },
           {
             event_id: newEvent.id,
+            name: "Event Director",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_EVENT_SETUP,
+              EVENT_PERMISSIONS.MANAGE_BUDGET,
+              EVENT_PERMISSIONS.MANAGE_READINESS,
+              EVENT_PERMISSIONS.MANAGE_APPROVALS,
+              EVENT_PERMISSIONS.VIEW_EXECUTIVE_DASHBOARD,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Program Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_AGENDA,
+              EVENT_PERMISSIONS.MANAGE_TRACKS,
+              EVENT_PERMISSIONS.MANAGE_SESSIONS,
+              EVENT_PERMISSIONS.MANAGE_SPEAKERS,
+              EVENT_PERMISSIONS.MANAGE_CONTENT,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Venue & Operations Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_ROOMS,
+              EVENT_PERMISSIONS.MANAGE_EQUIPMENT,
+              EVENT_PERMISSIONS.MANAGE_ACCESS,
+              EVENT_PERMISSIONS.MANAGE_QUEUES,
+              EVENT_PERMISSIONS.MANAGE_INCIDENTS,
+              EVENT_PERMISSIONS.MANAGE_ONSITE_STAFF,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Registration Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_FORMS,
+              EVENT_PERMISSIONS.MANAGE_TICKETS,
+              EVENT_PERMISSIONS.MANAGE_INVITATIONS,
+              EVENT_PERMISSIONS.MANAGE_CHECK_IN,
+              EVENT_PERMISSIONS.MANAGE_REFUNDS,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Marketing Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_CAMPAIGNS,
+              EVENT_PERMISSIONS.MANAGE_REFERRALS,
+              EVENT_PERMISSIONS.MANAGE_COMMUNICATIONS,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Sponsor/Exhibitor Manager",
+            permissions: [
+              EVENT_PERMISSIONS.MANAGE_SPONSORS,
+              EVENT_PERMISSIONS.MANAGE_BOOTHS,
+              EVENT_PERMISSIONS.MANAGE_SPONSOR_DELIVERABLES,
+              EVENT_PERMISSIONS.VIEW_SPONSOR_ROI,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Speaker",
+            permissions: [EVENT_PERMISSIONS.ACCESS_SPEAKER_PORTAL],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
             name: "Judge",
-            permissions: [EVENT_PERMISSIONS.VIEW_DASHBOARD, EVENT_PERMISSIONS.SCORE_SUBMISSIONS],
+            permissions: [
+              EVENT_PERMISSIONS.VIEW_DASHBOARD,
+              EVENT_PERMISSIONS.SCORE_SUBMISSIONS,
+              EVENT_PERMISSIONS.ACCESS_SPEAKER_PORTAL
+            ],
             is_system: true
           },
           {
             event_id: newEvent.id,
             name: "Mentor",
-            permissions: [EVENT_PERMISSIONS.VIEW_DASHBOARD],
+            permissions: [
+              EVENT_PERMISSIONS.VIEW_DASHBOARD,
+              EVENT_PERMISSIONS.ACCESS_SPEAKER_PORTAL
+            ],
             is_system: true
           },
           {
             event_id: newEvent.id,
             name: "Volunteer",
-            permissions: [EVENT_PERMISSIONS.VIEW_DASHBOARD, EVENT_PERMISSIONS.MANAGE_ATTENDEES],
+            permissions: [
+              EVENT_PERMISSIONS.VIEW_DASHBOARD,
+              EVENT_PERMISSIONS.MANAGE_ATTENDEES,
+              EVENT_PERMISSIONS.VIEW_SHIFTS,
+              EVENT_PERMISSIONS.MANAGE_ASSIGNED_TASKS,
+              EVENT_PERMISSIONS.ACKNOWLEDGE_TASKS,
+              EVENT_PERMISSIONS.MANAGE_CHECK_IN
+            ],
+            is_system: true
+          },
+          {
+            event_id: newEvent.id,
+            name: "Auditor/Support Operator",
+            permissions: [
+              EVENT_PERMISSIONS.ACCESS_SUPPORT_PORTAL,
+              EVENT_PERMISSIONS.VIEW_AUDIT_LOGS,
+              EVENT_PERMISSIONS.VIEW_DASHBOARD
+            ],
             is_system: true
           }
         ]
@@ -97,7 +314,7 @@ export class EventService {
   // 2. GET ALL EVENTS
   static async getAllEvents(page = 1, limit = 10, search?: string) {
     const skip = (page - 1) * limit;
-    
+
     const whereClause: Prisma.EventWhereInput = search ? {
       OR: [
         { title: { contains: search, mode: 'insensitive' } },
@@ -117,7 +334,7 @@ export class EventService {
     });
 
     const total = await prisma.event.count({ where: whereClause });
-    
+
     // Map response to keep type as string
     const formattedEvents = events.map(evt => {
       const { type, ...rest } = evt;
@@ -144,7 +361,7 @@ export class EventService {
           }
         },
         role_definitions: { select: { id: true, name: true, permissions: true } },
-        _count: { select: { registrations: true } } 
+        _count: { select: { registrations: true } }
       }
     });
 
@@ -173,7 +390,7 @@ export class EventService {
       });
 
       if (staffRole) {
-        userContext.role = staffRole.role.name; 
+        userContext.role = staffRole.role.name;
         const basePermissions = (staffRole.role.permissions as string[]) || [];
         const overrides = (staffRole.permissions_override as string[]) || [];
         userContext.permissions = Array.from(new Set([...basePermissions, ...overrides]));
@@ -197,7 +414,7 @@ export class EventService {
     const { type, ...rest } = event;
     return { ...rest, type: type.name, user_context: userContext };
   }
-  
+
   // 4. UPDATE EVENT
   static async updateEvent(eventId: number, userId: number, data: any) {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
@@ -208,7 +425,7 @@ export class EventService {
     if (!isCreator) {
       const staffRole = await prisma.eventUserRole.findUnique({
         where: { event_id_user_id: { event_id: eventId, user_id: userId } },
-        include: { role: true } 
+        include: { role: true }
       });
 
       if (!staffRole) throw new Error("Unauthorized: You are not staff for this event");
@@ -216,8 +433,8 @@ export class EventService {
       const rolePermissions = (staffRole.role.permissions as string[]) || [];
       const overrides = (staffRole.permissions_override as string[]) || [];
 
-      const hasManagePermission = 
-        rolePermissions.includes(EVENT_PERMISSIONS.MANAGE_EVENT) || 
+      const hasManagePermission =
+        rolePermissions.includes(EVENT_PERMISSIONS.MANAGE_EVENT) ||
         overrides.includes(EVENT_PERMISSIONS.MANAGE_EVENT);
 
       if (!hasManagePermission) throw new Error("Unauthorized: You lack the MANAGE_EVENT permission");
@@ -225,6 +442,9 @@ export class EventService {
 
     const { type, ...updateData } = data;
     const finalUpdateData: any = { ...updateData };
+
+    // NOTE: custom_fields is passed through automatically via ...updateData above
+    // since it is now part of UpdateEventSchema. No extra handling needed here.
 
     if (type) {
       // Find or create the event type (case-insensitive)
@@ -249,8 +469,8 @@ export class EventService {
       finalUpdateData.type_id = eventType.id;
     }
 
-    const updatedEvent = await prisma.event.update({ 
-      where: { id: eventId }, 
+    const updatedEvent = await prisma.event.update({
+      where: { id: eventId },
       data: finalUpdateData,
       include: {
         type: { select: { name: true } }
