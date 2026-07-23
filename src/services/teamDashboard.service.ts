@@ -9,8 +9,13 @@ export class TeamDashboardService {
 
   // 1. GET TEAM DETAILS (For the Dashboard UI)
   // 1. GET TEAM DETAILS (For the Dashboard UI)
-  static async getTeamDetails(teamId: number, requestingUserId: number) {
-    const team = await prisma.team.findUnique({
+  static async getTeamDetails(teamId: number, requestingUserId: number): Promise<any> {
+    if (isNaN(teamId)) {
+      throw new Error("Invalid team or registration ID");
+    }
+
+    // Try to find the team first
+    let team = await prisma.team.findUnique({
       where: { id: teamId },
       include: {
         members: {
@@ -20,23 +25,136 @@ export class TeamDashboardService {
           where: { status: 'pending' },
           select: { id: true, email: true, expires_at: true },
         },
-        // 👇 NEW: Fetch the specific event rules for this team
+        submissions: {
+          orderBy: { submitted_at: 'desc' },
+          include: {
+            user: { select: { id: true, name: true, email: true } }
+          }
+        },
         event: {
           select: {
             id: true,
             title: true,
+            banner_url: true,
+            logo_url: true,
+            start_date: true,
+            end_date: true,
             min_team_size: true,
-            max_team_size: true
+            max_team_size: true,
+            timelines: {
+              orderBy: { start_time: 'asc' }
+            }
           }
         }
       }
     });
 
-    if (!team) throw new Error("Team not found");
+    // If no team found, check if this is a solo registration ID
+    if (!team) {
+      const registration = await prisma.registration.findUnique({
+        where: { id: teamId },
+        include: {
+          user: true,
+          event: {
+            select: {
+              id: true,
+              title: true,
+              banner_url: true,
+              logo_url: true,
+              start_date: true,
+              end_date: true,
+              min_team_size: true,
+              max_team_size: true,
+              timelines: {
+                orderBy: { start_time: 'asc' }
+              }
+            }
+          }
+        }
+      });
+
+      if (!registration) throw new Error("Team or Registration not found");
+      if (registration.user_id !== requestingUserId) {
+        throw new Error("Unauthorized: You do not have access to this registration");
+      }
+
+      // If registration already has a team_id, recursive fetch using team_id
+      if (registration.team_id) {
+        return this.getTeamDetails(registration.team_id, requestingUserId);
+      }
+
+      // If registration does not have a team_id, create a solo team for them
+      const createdTeam = await prisma.$transaction(async (tx) => {
+        const teamName = `${registration.user.name}'s Space`;
+        const newTeam = await tx.team.create({
+          data: {
+            name: teamName,
+            event_id: registration.event_id,
+            leader_id: requestingUserId,
+            status: registration.status === 'confirmed' ? 'active' : 'draft'
+          }
+        });
+
+        await tx.teamMember.create({
+          data: {
+            team_id: newTeam.id,
+            user_id: requestingUserId
+          }
+        });
+
+        await tx.registration.update({
+          where: { id: registration.id },
+          data: {
+            team_id: newTeam.id
+          }
+        });
+
+        return newTeam;
+      });
+
+      // Fetch the details of the newly created team
+      return this.getTeamDetails(createdTeam.id, requestingUserId);
+    }
 
     // Authorization: Only team members can view the dashboard
     const isMember = team.members.some(m => m.user_id === requestingUserId);
     if (!isMember) throw new Error("Unauthorized: You are not a member of this team");
+
+    // Fetch all registrations for this team's event to get ticket codes and check-in statuses
+    const registrations = await prisma.registration.findMany({
+      where: {
+        event_id: team.event_id,
+        user_id: { in: team.members.map(m => m.user_id) }
+      },
+      select: {
+        id: true,
+        user_id: true,
+        ticket_code: true,
+        checked_in: true,
+        checked_in_at: true
+      }
+    });
+
+    const regMap = new Map(registrations.map(r => [r.user_id, r]));
+
+    // Map through members and auto-generate missing ticket codes dynamically
+    const membersWithTickets = await Promise.all(team.members.map(async (m) => {
+      let regInfo = regMap.get(m.user_id);
+      if (regInfo && !regInfo.ticket_code) {
+        const ticketCode = `cc_tck_${crypto.randomBytes(12).toString('hex')}`;
+        await prisma.registration.update({
+          where: { id: regInfo.id },
+          data: { ticket_code: ticketCode }
+        });
+        regInfo.ticket_code = ticketCode;
+      }
+      return {
+        ...m,
+        ticket_code: regInfo?.ticket_code || null,
+        checked_in: regInfo?.checked_in || false,
+        checked_in_at: regInfo?.checked_in_at || null
+      };
+    }));
 
     // 👇 NEW: Calculate capacity to make frontend UI rendering trivial
     // We count pending invites as "taken" seats so a leader can't accidentally over-invite
@@ -45,6 +163,7 @@ export class TeamDashboardService {
 
     return {
       ...team,
+      members: membersWithTickets,
       is_leader: team.leader_id === requestingUserId, 
       
       // Send pre-calculated state to the React frontend
@@ -77,28 +196,45 @@ export class TeamDashboardService {
       throw new Error("Unauthorized: Only the team leader can invite members");
     }
 
-    // Check if already invited or already in team to prevent spam
-    const existingInvite = await prisma.teamInvite.findFirst({
-      where: { team_id: teamId, email: inviteeEmail, status: 'pending' }
+    const normalizedEmail = inviteeEmail.toLowerCase();
+
+    // 1. Check if already invited AND pending to prevent spam
+    const existingPendingInvite = await prisma.teamInvite.findFirst({
+      where: { team_id: teamId, email: normalizedEmail, status: 'pending' }
     });
-    if (existingInvite) throw new Error("An invitation is already pending for this email");
+    if (existingPendingInvite) {
+      throw new Error("An invitation is already pending for this email");
+    }
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    const invite = await prisma.teamInvite.create({
-      data: {
+    // 2. THE FIX: Use upsert to cleanly handle re-invites 
+    // This overwrites any old 'accepted' or 'rejected' invite row for this email
+    const invite = await prisma.teamInvite.upsert({
+      where: {
+        team_id_email: { 
+          team_id: teamId, 
+          email: normalizedEmail 
+        }
+      },
+      update: {
+        token: token,
+        expires_at: expiresAt,
+        status: 'pending' // Reset the status for the fresh invite
+      },
+      create: {
         team_id: teamId,
-        email: inviteeEmail.toLowerCase(),
+        email: normalizedEmail,
         token: token,
         expires_at: expiresAt
       }
     });
 
-    // Fire & Forget email (Don't await it so the API responds instantly)
+    // 3. Fire & Forget email (Don't await it so the API responds instantly)
     const magicLink = `${config.FRONTEND_URL}/join-team?token=${token}`;
-    EmailService.sendTeamInvite(inviteeEmail, team.name, magicLink).catch(console.error);
+    EmailService.sendTeamInvite(normalizedEmail, team.name, magicLink).catch(console.error);
 
     return invite;
   }
@@ -169,7 +305,14 @@ export class TeamDashboardService {
 
     const invite = await prisma.teamInvite.findUnique({ 
       where: { token },
-      include: { team: true }
+      include: { 
+        team: {
+          include: {
+            event: { select: { max_team_size: true, capacity: true } },
+            _count: { select: { members: true } }
+          }
+        } 
+      }
     });
 
     // Validations
@@ -182,16 +325,40 @@ export class TeamDashboardService {
       throw new Error("This invite was sent to a different email address. Please log in with the correct account.");
     }
 
+    if (invite.team._count.members >= invite.team.event.max_team_size) {
+      throw new Error(`This team has already reached the maximum limit of ${invite.team.event.max_team_size} members.`);
+    }
+
+    if (invite.team.event.capacity > 0) {
+      const confirmedCount = await prisma.registration.count({
+        where: { event_id: invite.team.event_id, status: 'confirmed' }
+      });
+      if (confirmedCount >= invite.team.event.capacity) {
+        throw new Error("This event has reached its maximum participation capacity. No more members can join.");
+      }
+    }
+
     // Use a transaction to ensure all database steps succeed together
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       
-      // A. Mark Invite as Accepted [cite: 17]
+      // THE FIX 2: Check if user is already in a DIFFERENT team for this event
+      const existingRegistration = await tx.registration.findFirst({
+        where: { event_id: invite.team.event_id, user_id: userId }
+      });
+
+      if (existingRegistration?.team_id && existingRegistration.team_id !== invite.team_id) {
+        throw new Error("You are already part of another team for this event. You must leave that team first.");
+      }
+
+      // A. Mark Invite as Accepted
       await tx.teamInvite.update({
         where: { id: invite.id },
         data: { status: 'accepted' }
       });
 
-      // B. Add User to the Team [cite: 19]
+      // B. Add User to the Team
+      // Note: If they double-click, Prisma's @@id([team_id, user_id]) constraint will catch it,
+      // but you can wrap this in a try-catch to throw a cleaner error if you want.
       await tx.teamMember.create({
         data: {
           team_id: invite.team_id,
@@ -199,35 +366,135 @@ export class TeamDashboardService {
         }
       });
 
-      // C. Handle Event Registration [cite: 14, 15]
-      // Check if the user is already registered for this event (e.g., they registered solo first)
-      const existingRegistration = await tx.registration.findFirst({
-        where: { event_id: invite.team.event_id, user_id: userId }
-      });
-
+      // C. Handle Event Registration
+      let registrationId: number;
       if (existingRegistration) {
         // Update existing registration to link to this team 
-        await tx.registration.update({
+        const updatedReg = await tx.registration.update({
           where: { id: existingRegistration.id },
           data: { team_id: invite.team_id, status: 'confirmed' }
         });
+        registrationId = updatedReg.id;
       } else {
         // Create a brand new registration for the event 
-        await tx.registration.create({
+        const ticketCode = `cc_tck_${crypto.randomBytes(12).toString('hex')}`;
+        const newReg = await tx.registration.create({
           data: {
             event_id: invite.team.event_id,
             user_id: userId,
             team_id: invite.team_id,
-            status: 'confirmed'
+            status: 'confirmed',
+            ticket_code: ticketCode
           }
         });
+        registrationId = newReg.id;
       }
 
       return { 
         success: true, 
         teamId: invite.team_id, 
-        teamName: invite.team.name 
+        teamName: invite.team.name,
+        registrationId
       };
+    });
+
+    EmailService.sendRegistrationConfirmationEmail(result.registrationId).catch(err => 
+      console.error(`[EMAIL_ERROR] Failed to send email for registration ${result.registrationId}:`, err)
+    );
+
+    return { 
+      success: result.success, 
+      teamId: result.teamId, 
+      teamName: result.teamName 
+    };
+  }
+
+  // 7. SUBMIT / UPDATE PROJECT
+  static async submitProject(teamId: number, userId: number, title: string, repoUrl: string) {
+    // Check membership
+    const membership = await prisma.teamMember.findUnique({
+      where: { team_id_user_id: { team_id: teamId, user_id: userId } }
+    });
+    if (!membership) {
+      throw new Error("Unauthorized: You must be a team member to submit a project");
+    }
+
+    const team = await prisma.team.findUnique({
+      where: { id: teamId }
+    });
+    if (!team) throw new Error("Team not found");
+
+    // Check for existing submission for this team and event
+    const existingSubmission = await prisma.submission.findFirst({
+      where: { team_id: teamId, event_id: team.event_id }
+    });
+
+    if (existingSubmission) {
+      return prisma.submission.update({
+        where: { id: existingSubmission.id },
+        data: {
+          title,
+          repo_url: repoUrl,
+          user_id: userId
+        }
+      });
+    } else {
+      return prisma.submission.create({
+        data: {
+          team_id: teamId,
+          event_id: team.event_id,
+          user_id: userId,
+          title,
+          repo_url: repoUrl
+        }
+      });
+    }
+  }
+
+  // 8. REVOKE PENDING INVITATION
+  static async revokeInvite(teamId: number, leaderId: number, inviteId: number) {
+    const team = await prisma.team.findUnique({ where: { id: teamId } });
+    if (!team || team.leader_id !== leaderId) {
+      throw new Error("Unauthorized: Only the team leader can revoke invitations");
+    }
+
+    const invite = await prisma.teamInvite.findUnique({ where: { id: inviteId } });
+    if (!invite) throw new Error("Invitation not found");
+    if (invite.team_id !== teamId) throw new Error("Invitation does not belong to this team");
+    if (invite.status !== 'pending') throw new Error("Only pending invitations can be revoked");
+
+    return prisma.teamInvite.delete({
+      where: { id: inviteId }
+    });
+  }
+
+  // 9. LEAVE TEAM
+  static async leaveTeam(teamId: number, userId: number) {
+    const team = await prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) throw new Error("Team not found");
+
+    if (team.leader_id === userId) {
+      throw new Error("The team leader cannot leave the team. You must transfer leadership or delete the team.");
+    }
+
+    const membership = await prisma.teamMember.findUnique({
+      where: { team_id_user_id: { team_id: teamId, user_id: userId } }
+    });
+    if (!membership) throw new Error("You are not a member of this team");
+
+    return prisma.$transaction(async (tx) => {
+      // A. Remove membership
+      await tx.teamMember.delete({
+        where: { team_id_user_id: { team_id: teamId, user_id: userId } }
+      });
+
+      // B. Cancel registration / disassociate from team
+      await tx.registration.updateMany({
+        where: { team_id: teamId, user_id: userId },
+        data: { status: 'cancelled', team_id: null }
+      });
+
+      return { success: true };
     });
   }
 }

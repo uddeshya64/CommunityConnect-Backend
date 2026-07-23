@@ -2,170 +2,379 @@ import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import nodemailer from "nodemailer";
-import { randomBytes } from "crypto";
-import { config } from '../config/env';
-import { EmailService } from './email.service';
 
-if (!config.JWT_SECRET || !config.RESET_TOKEN_SECRET) {
-  console.error("❌ FATAL ERROR: JWT_SECRET or RESET_SECRET is missing in .env");
-  process.exit(1); 
+import { config } from "../config/env";
+import { EmailService } from "./email.service";
+import { SessionService } from "./session.service";
+
+if (
+  !config.JWT_SECRET ||
+  !config.RESET_TOKEN_SECRET
+) {
+  console.error(
+    "❌ FATAL ERROR: JWT_SECRET or RESET_SECRET is missing in .env"
+  );
+
+  process.exit(1);
 }
-const JWT_SECRET = config.JWT_SECRET;
-const RESET_TOKEN_SECRET = config.RESET_TOKEN_SECRET;
 
 const prisma = new PrismaClient();
-const otpStore: Record<string, any> = {}; // Use Redis in production
 
-// --- EMAIL TRANSPORTER SETUP ---
-const transporter = nodemailer.createTransport({
-  service: "gmail", // Or 'SES', 'SendGrid'
-  auth: {
-    user: config.EMAIL_USER, // 
-    pass: config.EMAIL_PASS, // 
-  },
-});
+// Temporary in-memory OTP store
+const otpStore: Record<string, any> = {};
 
 export class AuthService {
+  // =====================================================
+  // SEND OTP
+  // =====================================================
 
-// --- 1. UNIFIED SEND OTP ---
-  static async sendOtp(email: string, password?: string, context: 'REGISTER' | 'RESET' = 'REGISTER') {
-    const user = await prisma.user.findUnique({ where: { email } });
+  static async sendOtp(
+    email: string,
+    password?: string,
+    context: "REGISTER" | "RESET" = "REGISTER"
+  ) {
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: {
+        email,
+      },
+    });
 
-    // SECURITY CHECK: Context Isolation
-    if (context === 'REGISTER') {
-      if (user) throw new Error("User already exists. Please login.");
-      // For registration, password MUST be provided
-      if (!password) throw new Error("Password is required for registration.");
+    // -------------------------------------------------
+    // REGISTER OTP
+    // -------------------------------------------------
+
+    if (context === "REGISTER") {
+      // User already exists
+      if (user) {
+        throw new Error(
+          "User already exists. Please login."
+        );
+      }
+
+      // Password required for normal registration
+      if (!password) {
+        throw new Error(
+          "Password is required for registration."
+        );
+      }
     }
-    
-    if (context === 'RESET' && !user) {
-      // Fake success to prevent Email Enumeration
-      return { message: "OTP sent to email successfully" }; 
+
+    // -------------------------------------------------
+    // RESET PASSWORD OTP
+    // -------------------------------------------------
+
+    if (context === "RESET" && !user) {
+      // Don't reveal whether email exists
+      return {
+        message: "OTP sent successfully",
+      };
     }
 
-    // Generate & Store
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const hash = await bcrypt.hash(otp, 10);
+    // -------------------------------------------------
+    // GENERATE OTP
+    // -------------------------------------------------
 
-    // Only hash the password if it exists (Registration path)
-    const passwordHash = password ? await bcrypt.hash(password, 10) : undefined;
+    const otp = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
+
+    // Hash OTP before storing
+    const hash = await bcrypt.hash(
+      otp,
+      10
+    );
+
+    // Hash password if provided
+    const passwordHash = password
+      ? await bcrypt.hash(password, 10)
+      : undefined;
+
+    // Store OTP data
     otpStore[email] = {
       hash,
       passwordHash,
-      context, // <--- CRITICAL: Locks the OTP to this specific action
-      expires: Date.now() + 10 * 60 * 1000 // 10 mins
+      context,
+      expires:
+        Date.now() +
+        10 * 60 * 1000,
     };
 
-    await EmailService.sendOtpEmail(email, otp);
+    // Send OTP email
+    await EmailService.sendOtpEmail(
+      email,
+      otp
+    );
 
-    return { message: "OTP sent to email successfully" };
+    return {
+      message: "OTP sent successfully",
+    };
   }
 
-  // --- 2. UNIFIED VERIFY OTP ---
-  static async verifyOtp( 
-    name : string,
+  // =====================================================
+  // VERIFY REGISTER OTP
+  // =====================================================
+
+  static async verifyRegisterOtp(
+    name: string,
     email: string,
-    otp: string,
-    context: 'REGISTER' | 'RESET'
+    otp: string
   ) {
+    // Get OTP data
     const data = otpStore[email];
 
-    // Validations
-    if (!data) throw new Error("OTP expired or invalid");
-    if (data.context !== context) throw new Error("Invalid OTP context"); // Prevents hacking
-    
-    const isValid = await bcrypt.compare(otp, data.hash);
-    if (!isValid) throw new Error("Invalid OTP");
-
-    // ISSUE TOKEN BASED ON CONTEXT
-    if (context === 'RESET') {
-      return jwt.sign({ id: email, purpose: 'reset_pass' }, config.RESET_TOKEN_SECRET!, { expiresIn: '5m' });
-
-    }else {
-      // Create User if they don't exist
-        const user = await prisma.user.create({
-          data: {
-            name,
-            email,
-            password_hash: data.passwordHash,
-            created_at: new Date(),
-          },
-        });
-
-        delete otpStore[email]; // Clear it
-
-        return jwt.sign(
-        { id: user.id, email: user.email, purpose: 'email_verified' }, 
-        config.JWT_SECRET!, 
-        { expiresIn: '15m' }
-        );
-    }
-    
-  }
-
-  // --- 3. RESET PASSWORD ACTION ---
-  static async resetPassword(token: string, newPass: string) {
-    // Verify Token
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, config.RESET_TOKEN_SECRET!);
-    } catch {
-      throw new Error("Invalid or expired token");
+    // Check OTP exists
+    if (!data) {
+      throw new Error(
+        "OTP expired or invalid"
+      );
     }
 
-    if (decoded.purpose !== 'reset_pass') throw new Error("Invalid token type");
-
-    // Update DB
-    const hash = await bcrypt.hash(newPass, 10);
-    await prisma.user.update({
-      where: { email: decoded.id },
-      data: { password_hash: hash }
-    });
-  }
-
-  // --- LOGIN LOGIC ---
-  static async loginWithEmail(email: string, password: string) {
-    // 1. Find User
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    if (!user) {
-      throw new Error("Invalid email or password");
+    // Check OTP context
+    if (data.context !== "REGISTER") {
+      throw new Error(
+        "Invalid OTP context"
+      );
     }
 
-    // 2. Verify Password
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    if (!isPasswordValid) {
-      throw new Error("Invalid email or password");
+    // Check OTP expiration
+    if (
+      Date.now() >
+      data.expires
+    ) {
+      delete otpStore[email];
+
+      throw new Error(
+        "OTP expired or invalid"
+      );
     }
-    // 3. Generate JWT
-    return this.generateToken(user.id);
-  }
 
-  
-  
-  // --- GOOGLE LOGIC (Unchanged) ---
-  static async loginWithGoogle(googleProfile: { email: string; name: string }) {
-    let user = await prisma.user.findUnique({
-      where: { email: googleProfile.email },
-    });
+    // Verify OTP
+    const isValid =
+      await bcrypt.compare(
+        otp,
+        data.hash
+      );
 
-    if (!user) {
-      const randomPassword = randomBytes(16).toString("hex");
-      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+    if (!isValid) {
+      throw new Error(
+        "Invalid OTP"
+      );
+    }
 
-      user = await prisma.user.create({
+    // Create user
+    const user =
+      await prisma.user.create({
         data: {
-          email: googleProfile.email,
-          name: googleProfile.name,
-          password_hash: hashedPassword,
+          name,
+          email,
+          password_hash:
+            data.passwordHash,
+          created_at: new Date(),
         },
       });
-    }
-    return this.generateToken(user.id);
+
+    // Delete OTP after successful registration
+    delete otpStore[email];
+
+    // Create login session
+    return await SessionService.createSession(
+      user
+    );
   }
 
-  private static generateToken(userId: number) {
-    return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: "7d" });
+  // =====================================================
+  // VERIFY RESET OTP
+  // =====================================================
+
+  static async verifyResetOtp(
+    email: string,
+    otp: string
+  ) {
+    // Get OTP data
+    const data = otpStore[email];
+
+    // Check OTP exists
+    if (!data) {
+      throw new Error(
+        "OTP expired or invalid"
+      );
+    }
+
+    // Check context
+    if (data.context !== "RESET") {
+      throw new Error(
+        "Invalid OTP context"
+      );
+    }
+
+    // Check expiration
+    if (
+      Date.now() >
+      data.expires
+    ) {
+      delete otpStore[email];
+
+      throw new Error(
+        "OTP expired or invalid"
+      );
+    }
+
+    // Verify OTP
+    const isValid =
+      await bcrypt.compare(
+        otp,
+        data.hash
+      );
+
+    if (!isValid) {
+      throw new Error(
+        "Invalid OTP"
+      );
+    }
+
+    // Delete OTP after successful verification
+    delete otpStore[email];
+
+    // Create reset token
+    return jwt.sign(
+      {
+        id: email,
+        purpose: "reset_pass",
+      },
+      config.RESET_TOKEN_SECRET!,
+      {
+        expiresIn: "5m",
+      }
+    );
+  }
+
+  // =====================================================
+  // RESET PASSWORD
+  // =====================================================
+
+  static async resetPassword(
+    token: string,
+    newPassword: string
+  ) {
+    let decoded: any;
+
+    // Verify reset token
+    try {
+      decoded = jwt.verify(
+        token,
+        config.RESET_TOKEN_SECRET!
+      );
+    } catch {
+      throw new Error(
+        "Invalid or expired token"
+      );
+    }
+
+    // Check token purpose
+    if (
+      decoded.purpose !==
+      "reset_pass"
+    ) {
+      throw new Error(
+        "Invalid token"
+      );
+    }
+
+    // Hash new password
+    const hash =
+      await bcrypt.hash(
+        newPassword,
+        10
+      );
+
+    // Update password
+    await prisma.user.update({
+      where: {
+        email: decoded.id,
+      },
+
+      data: {
+        password_hash: hash,
+      },
+    });
+
+    return {
+      message:
+        "Password reset successfully",
+    };
+  }
+
+  // =====================================================
+  // LOGIN WITH EMAIL AND PASSWORD
+  // =====================================================
+
+  static async loginWithEmail(
+    email: string,
+    password: string
+  ) {
+    // Find user
+    const user =
+      await prisma.user.findUnique({
+        where: {
+          email,
+        },
+      });
+
+    // User doesn't exist
+    if (!user) {
+      throw new Error(
+        "Invalid email or password"
+      );
+    }
+
+    // Google-only user
+    // doesn't have password
+    if (!user.password_hash) {
+      throw new Error(
+        "Invalid email or password"
+      );
+    }
+
+    // Verify password
+    const isPasswordValid =
+      await bcrypt.compare(
+        password,
+        user.password_hash
+      );
+
+    if (!isPasswordValid) {
+      throw new Error(
+        "Invalid email or password"
+      );
+    }
+
+    // Create session
+    return await SessionService.createSession(
+      user
+    );
+  }
+
+  // =====================================================
+  // LOGIN WITH GOOGLE
+  // =====================================================
+
+  static async loginWithGoogle(
+    user: any
+  ) {
+    // Passport should provide
+    // the authenticated user
+    if (!user) {
+      throw new Error(
+        "Google authentication failed"
+      );
+    }
+
+    // Create normal application session
+    // using the same session logic
+    // as email/password login.
+    return await SessionService.createSession(
+      user
+    );
   }
 }
