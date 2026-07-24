@@ -46,6 +46,7 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://192.168.20.39:3001",
+  "https://community-connect-frontend-5oe1-beta.vercel.app",
   config.FRONTEND_URL,
 ].filter(Boolean);
 
