@@ -8,22 +8,34 @@ const prisma = new PrismaClient();
 
 // --- EMAIL TRANSPORTER SETUP ---
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,           // Use 587 instead of the default 465
-  secure: false,       // false for 587, it will upgrade to TLS automatically
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false,
   auth: {
-    user: config.EMAIL_USER,
-    pass: config.EMAIL_PASS,
+    user: config.BREVO_SMTP_USER,
+    pass: config.BREVO_SMTP_KEY,
   },
-  // 👇 THE RENDER FIX: Give the server more time to complete the handshake
-  connectionTimeout: 20000, // 20 seconds
+  connectionTimeout: 20000,
   greetingTimeout: 20000,
   socketTimeout: 20000,
-  // 👇 Optional but helps bypass strict cloud firewalls
-  tls: {
-    rejectUnauthorized: false 
-  }
 });
+// const transporter = nodemailer.createTransport({
+//   host: "smtp.gmail.com",
+//   port: 587,           // Use 587 instead of the default 465
+//   secure: false,       // false for 587, it will upgrade to TLS automatically
+//   auth: {
+//     user: config.EMAIL_USER,
+//     pass: config.EMAIL_PASS,
+//   },
+//   // 👇 THE RENDER FIX: Give the server more time to complete the handshake
+//   connectionTimeout: 20000, // 20 seconds
+//   greetingTimeout: 20000,
+//   socketTimeout: 20000,
+//   // 👇 Optional but helps bypass strict cloud firewalls
+//   tls: {
+//     rejectUnauthorized: false 
+//   }
+// });
 
 export class EmailService {
   
@@ -31,7 +43,7 @@ export class EmailService {
   static async sendOtpEmail(email: string, otp: string) {
     try {
       await transporter.sendMail({
-        from: '"CommunityConnect" <no-reply@communityconnect.com>',
+        from: `"${process.env.BREVO_SENDER_NAME}" <${process.env.BREVO_SENDER_EMAIL}>`,
         to: email,
         subject: "Your Verification Code",
         text: `Your verification code is: ${otp}. It expires in 10 minutes.`,

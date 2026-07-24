@@ -31,6 +31,9 @@ import notificationRoutes from "./routes/notification.routes";
 import locationRoutes from "./routes/location.routes";
 import organizerConfigRoutes from "./routes/organizerConfig.routes";
 import imageRoutes from "./routes/image";
+import registrationRoutes from "./routes/registeration.routes";
+
+
 
 import { config } from "./config/env";
 
@@ -260,6 +263,8 @@ app.use(
   "/api/image",
   imageRoutes
 );
+
+app.use("/api/registrations", registrationRoutes);
 
 // =========================================
 // 4. GLOBAL ERROR HANDLER

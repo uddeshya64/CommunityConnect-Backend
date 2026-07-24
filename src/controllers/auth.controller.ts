@@ -10,7 +10,7 @@ import {
 
 import { SessionService } from "../services/session.service";
 
-import config from "../config/config";
+import { config } from "../config/env";
 import { JwtUtil } from "../utils/jwt";
 
 
