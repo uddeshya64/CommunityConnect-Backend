@@ -3,7 +3,10 @@ import { z } from "zod";
 
 const envSchema = z.object({
   // Database
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
+
   DATABASE_URL: z.string().url(),
   DIRECT_URL: z.string().url().optional(),
 
@@ -17,9 +20,11 @@ const envSchema = z.object({
 
   REFRESH_TOKEN_EXPIRES_DAYS: z.coerce.number().default(15),
 
-  // Email
-  EMAIL_USER: z.string().email(),
-  EMAIL_PASS: z.string().min(1),
+  // Brevo SMTP
+  BREVO_SMTP_USER: z.string().email(),
+  BREVO_SMTP_KEY: z.string().min(1),
+  BREVO_SENDER_EMAIL: z.string().email(),
+  BREVO_SENDER_NAME: z.string().default("CommunityConnect"),
 
   FRONTEND_URL: z.string().url(),
 
