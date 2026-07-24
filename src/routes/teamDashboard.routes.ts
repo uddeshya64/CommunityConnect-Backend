@@ -22,6 +22,10 @@ router.use(authenticate);
 // User has logged in and is submitting the token to join the team
 router.post('/accept-invite', TeamDashboardController.acceptInvite);
 
+// POST /api/teamDashboard/decline-invite
+// User has logged in and is declining the team invitation
+router.post('/decline-invite', TeamDashboardController.declineInvite);
+
 // GET /api/teamDashboard/:id - Fetch dashboard details
 router.get('/:id', TeamDashboardController.getDashboard);
 

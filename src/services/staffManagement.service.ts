@@ -137,6 +137,26 @@ export class EventStaffService {
       return { success: true, eventId: invite.event_id, roleName: invite.role.name };
     });
   }
+
+  // ==========================================
+  // 3b. DECLINE STAFF INVITATION
+  // ==========================================
+  static async declineInvite(userId: number, token: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error("User not found");
+
+    const invite = await prisma.eventStaffInvite.findUnique({ where: { token } });
+    if (!invite) throw new Error("Invalid invitation token");
+    if (invite.status !== 'pending') throw new Error("Invitation already processed");
+    if (invite.email !== user.email) {
+      throw new Error("This invite was sent to a different email address.");
+    }
+
+    return prisma.eventStaffInvite.update({
+      where: { id: invite.id },
+      data: { status: 'declined' }
+    });
+  }
   // ==========================================
   // 4. VERIFY INVITATION (PUBLIC)
   // ==========================================

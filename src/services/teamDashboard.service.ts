@@ -409,6 +409,26 @@ export class TeamDashboardService {
     };
   }
 
+  // ==========================================
+  // 6b. DECLINE TEAM INVITATION (SECURE)
+  // ==========================================
+  static async declineInvite(userId: number, token: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error("User not found");
+
+    const invite = await prisma.teamInvite.findUnique({ where: { token } });
+    if (!invite) throw new Error("Invalid invitation token");
+    if (invite.status !== 'pending') throw new Error("Invitation already processed");
+    if (invite.email !== user.email) {
+      throw new Error("This invite was sent to a different email address.");
+    }
+
+    return prisma.teamInvite.update({
+      where: { id: invite.id },
+      data: { status: 'declined' }
+    });
+  }
+
   // 7. SUBMIT / UPDATE PROJECT
   static async submitProject(teamId: number, userId: number, title: string, repoUrl: string) {
     // Check membership
