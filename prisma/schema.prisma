@@ -120,20 +120,21 @@ model EventUserRole {
 }
 
 model Registration {
-  id            Int                @id @default(autoincrement())
-  event_id      Int
-  user_id       Int
-  team_id       Int?
-  status        RegistrationStatus
-  created_at    DateTime           @default(now())
-  checked_in    Boolean            @default(false)
-  checked_in_at DateTime?
-  checked_in_by Int?
-  ticket_code   String?            @unique @db.VarChar(100)
-  payments      Payment[]
-  event         Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  team          Team?              @relation(fields: [team_id], references: [id], onDelete: Cascade)
-  user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id             Int                @id @default(autoincrement())
+  event_id       Int
+  user_id        Int
+  team_id        Int?
+  status         RegistrationStatus
+  created_at     DateTime           @default(now())
+  checked_in     Boolean            @default(false)
+  checked_in_at  DateTime?
+  checked_in_by  Int?
+  ticket_code    String?            @unique @db.VarChar(100)
+  form_responses Json?
+  payments       Payment[]
+  event          Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  team           Team?              @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user           User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("registrations")
 }
