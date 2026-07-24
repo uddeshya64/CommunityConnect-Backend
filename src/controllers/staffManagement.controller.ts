@@ -85,6 +85,24 @@ export const EventStaffController = {
     }
   },
 
+  // 3b. DECLINE STAFF INVITATION
+  async declineInvite(req: Request, res: Response) {
+    try {
+      const userId = req.user!.id;
+      const { token } = AcceptStaffInviteSchema.parse(req.body);
+
+      await EventStaffService.declineInvite(userId, token);
+
+      res.json({ 
+        success: true, 
+        message: "Successfully declined the staff invitation."
+      });
+    } catch (error: any) {
+      if (error instanceof ZodError) return res.status(400).json({ error: "Validation Error", details: error.issues });
+      res.status(400).json({ error: error.message });
+    }
+  },
+
   // 4. CHECK-IN PARTICIPANT
   async checkInParticipant(req: Request, res: Response) {
     try {

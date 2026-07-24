@@ -90,6 +90,24 @@ export const TeamDashboardController = {
     }
   },
 
+  // 6b. DECLINE INVITATION (SECURE)
+  async declineInvite(req: Request, res: Response) {
+    try {
+      const userId = req.user!.id;
+      const { token } = AcceptTeamInviteSchema.parse(req.body);
+
+      await TeamDashboardService.declineInvite(userId, token);
+
+      res.json({ 
+        success: true, 
+        message: "Successfully declined the team invitation."
+      });
+    } catch (error: any) {
+      if (error instanceof ZodError) return res.status(400).json({ error: "Validation Error", details: error.issues });
+      res.status(400).json({ error: error.message });
+    }
+  },
+
   // 7. SUBMIT PROJECT
   async submitProject(req: Request, res: Response) {
     try {

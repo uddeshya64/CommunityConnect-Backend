@@ -15,6 +15,7 @@ import eventRoutes from "./routes/event.routes";
 import teamRoutes from "./routes/team.routes";
 import teamDashboardRoutes from "./routes/teamDashboard.routes";
 import eventStaffRoutes from "./routes/staffManagement.routes";
+import notificationRoutes from "./routes/notification.routes";
 import locationRoutes from "./routes/location.routes";
 import organizerConfigRoutes from "./routes/organizerConfig.routes";
 import imageRoutes from "./routes/image";
@@ -174,6 +175,14 @@ app.use(
 app.use(
   "/api/team-dashboard",
   teamDashboardRoutes
+);
+
+// =========================================
+// NOTIFICATIONS
+// =========================================
+app.use(
+  "/api/notifications",
+  notificationRoutes
 );
 
 // =========================================
