@@ -1,3 +1,15 @@
+/**
+ * This file is the entry point of the backend application.
+ * It is responsible for initializing the express app, configuring middleware, setting up routes, and starting the server.
+ * 
+ * @file server.ts
+ * @description Entry point of the backend application.
+ * @author Uddeshya Patidar, Anjali, Dipanshu
+ * @version 1.0.0
+ * @date 2026-07-24
+ * @lastModified 2026-07-24
+ */
+
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
@@ -304,8 +316,7 @@ const startServer = async () => {
       );
 
       console.log(
-        `🛡️ Environment: ${
-          config.NODE_ENV || "development"
+        `🛡️ Environment: ${config.NODE_ENV || "development"
         }`
       );
     });
