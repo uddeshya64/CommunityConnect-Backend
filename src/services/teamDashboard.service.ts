@@ -347,7 +347,39 @@ export class TeamDashboardService {
       });
 
       if (existingRegistration?.team_id && existingRegistration.team_id !== invite.team_id) {
-        throw new Error("You are already part of another team for this event. You must leave that team first.");
+        const otherTeamId = existingRegistration.team_id;
+        const otherTeam = await tx.team.findUnique({
+          where: { id: otherTeamId },
+          include: { _count: { select: { members: true } } }
+        });
+
+        if (otherTeam) {
+          if (otherTeam.leader_id === userId) {
+            if (otherTeam._count.members > 1) {
+              throw new Error("You are the leader of another team for this event. You must transfer leadership or remove other members first.");
+            } else {
+              // Disassociate registration first to prevent cascade delete
+              await tx.registration.updateMany({
+                where: { team_id: otherTeamId, user_id: userId },
+                data: { team_id: null, status: 'cancelled' }
+              });
+              // Automatically delete the empty team when they leave to join another
+              await tx.team.delete({
+                where: { id: otherTeamId }
+              });
+            }
+          } else {
+            // Disassociate registration first to prevent cascade delete
+            await tx.registration.updateMany({
+              where: { team_id: otherTeamId, user_id: userId },
+              data: { team_id: null, status: 'cancelled' }
+            });
+            // Automatically remove them from the other team
+            await tx.teamMember.delete({
+              where: { team_id_user_id: { team_id: otherTeamId, user_id: userId } }
+            });
+          }
+        }
       }
 
       // A. Mark Invite as Accepted
@@ -493,8 +525,12 @@ export class TeamDashboardService {
     const team = await prisma.team.findUnique({ where: { id: teamId } });
     if (!team) throw new Error("Team not found");
 
-    if (team.leader_id === userId) {
-      throw new Error("The team leader cannot leave the team. You must transfer leadership or delete the team.");
+    const memberCount = await prisma.teamMember.count({
+      where: { team_id: teamId }
+    });
+
+    if (team.leader_id === userId && memberCount > 1) {
+      throw new Error("The team leader cannot leave the team when there are other members. You must transfer leadership or remove other members first.");
     }
 
     const membership = await prisma.teamMember.findUnique({
@@ -513,6 +549,13 @@ export class TeamDashboardService {
         where: { team_id: teamId, user_id: userId },
         data: { status: 'cancelled', team_id: null }
       });
+
+      // C. If the leader left and was the only member, delete the team
+      if (team.leader_id === userId && memberCount === 1) {
+        await tx.team.delete({
+          where: { id: teamId }
+        });
+      }
 
       return { success: true };
     });
