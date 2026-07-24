@@ -361,7 +361,8 @@ export class EventService {
           }
         },
         role_definitions: { select: { id: true, name: true, permissions: true } },
-        _count: { select: { registrations: true } }
+        _count: { select: { registrations: true } },
+        timelines: { orderBy: { start_time: 'asc' } }
       }
     });
 
