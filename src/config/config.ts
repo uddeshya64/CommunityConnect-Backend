@@ -16,7 +16,7 @@ const config = {
 
   GOOGLE_CALLBACK_URL:
     process.env.GOOGLE_CALLBACK_URL ||
-    "https://communityconnect-backend-production.up.railway.app/api/auth/google/callback",
+    "http://localhost:3000/api/auth/google/callback",
 
   FRONTEND_URL:
     process.env.FRONTEND_URL ||
