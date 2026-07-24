@@ -51,6 +51,13 @@
     EventStaffController.acceptInvite
   );
 
+  // POST /api/events/staff/decline-invite
+  // Who can do this? ANY logged in user who has a valid magic link token
+  router.post('/decline-invite',
+    authenticate,
+    EventStaffController.declineInvite
+  );
+
   // ==========================================
   // PUBLIC ROUTES
   // ==========================================
