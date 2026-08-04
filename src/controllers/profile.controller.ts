@@ -59,7 +59,7 @@ export const ProfileController = {
       }
 
       const profile =
-        await ProfileService.getProfile(id);
+        await ProfileService.getProfile(id, (req as any).user?.id || 0);
 
       return res.status(200).json({
         success: true,

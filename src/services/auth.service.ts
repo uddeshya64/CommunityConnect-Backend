@@ -350,9 +350,13 @@ export class AuthService {
     }
 
     // Create session
-    return await SessionService.createSession(
+    const session = await SessionService.createSession(
       user
     );
+    return {
+      ...session,
+      user_settings: user.user_settings || {},
+    };
   }
 
   // =====================================================
