@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
+
 const prisma = new PrismaClient();
 
 export class ProfileService {
@@ -28,6 +29,7 @@ export class ProfileService {
         avatar_url: true,
         bio: true,
         location: true,
+        user_settings: true,
         created_at: true,
         updated_at: true,
 
@@ -114,11 +116,61 @@ export class ProfileService {
         avatar_url: true,
         bio: true,
         location: true,
+        user_settings: true,
         created_at: true,
         updated_at: true,
       },
     });
 
     return updatedUser;
+  }
+
+  // ==========================================
+  // GET USER SETTINGS
+  // ==========================================
+  static async getSettings(userId: number) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { user_settings: true },
+    });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user.user_settings || {};
+  }
+
+  // ==========================================
+  // UPDATE USER SETTINGS
+  // ==========================================
+  static async updateSettings(userId: number, settingsData: any) {
+    const current = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { user_settings: true },
+    });
+    if (!current) {
+      throw new Error("User not found");
+    }
+    const existingSettings = (current.user_settings as Record<string, any>) || {};
+    const mergedSettings = { ...existingSettings, ...settingsData };
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        user_settings: mergedSettings,
+        updated_at: new Date(),
+      },
+      select: { user_settings: true },
+    });
+    return updated.user_settings;
+  }
+
+  // ==========================================
+  // DELETE USER ACCOUNT
+  // ==========================================
+  static async deleteAccount(userId: number) {
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+    return { success: true, message: "Account deleted successfully" };
   }
 }
