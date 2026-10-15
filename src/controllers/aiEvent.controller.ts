@@ -91,6 +91,16 @@ function sanitiseIncomingDraft(input: unknown): EventDraftValues {
     }
   }
 
+  for (const field of ["banner_url", "logo_url"] as const) {
+    if (typeof draft[field] === "string" && !(draft[field] as string).trim()) {
+      delete draft[field];
+    }
+  }
+
+  if (draft.mode === "online" && !draft.location) {
+    draft.location = "Online";
+  }
+
   return draft;
 }
 
@@ -142,6 +152,9 @@ export const AiEventController = {
 
       res.status(result.valid ? 200 : 422).json({
         success: result.valid,
+        error: result.valid
+          ? undefined
+          : "Validation failed. Some fields are invalid or missing.",
         data: {
           valid: result.valid,
           event: result.event,

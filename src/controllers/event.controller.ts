@@ -24,7 +24,7 @@ export const EventController = {
       const upcomingOnly = req.query.upcomingOnly === 'true';
       const userId = req.user?.id;
 
-      const result = await EventService.getAllEvents(page, limit, search, userId, upcomingOnly);
+      const result = await EventService.getAllEvents(page, limit, search, userId);
       res.json({ success: true, data: result });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

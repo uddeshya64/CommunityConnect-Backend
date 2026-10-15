@@ -223,12 +223,7 @@ export function computeMissingFields(
     }
   }
 
-  // A start/end pair is only "missing" once the other one is known.
-  return missing.filter((key) => {
-    if (key !== "end_date") return true;
-    const start = draft?.start_date;
-    return !isDraftValuePresent("start_date", start);
-  });
+  return missing;
 }
 
 /** Human readable clarification questions for everything still missing. */

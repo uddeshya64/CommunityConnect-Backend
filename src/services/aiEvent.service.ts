@@ -60,9 +60,24 @@ export interface AiTurnInput {
 }
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
-const GEMINI_MAX_ATTEMPTS = 5;
+const GEMINI_MAX_ATTEMPTS = 2;
 const GEMINI_RETRY_BASE_MS = 500;
-const GEMINI_RETRY_MAX_MS = 8000;
+const GEMINI_RETRY_MAX_MS = 4000;
+const GEMINI_TIMEOUT_MS = 15000;
+
+/**
+ * Low-latency thinking settings per model family. Gemini 3 models use
+ * `thinkingLevel`, while Gemini 2.5 models use `thinkingBudget`; sending the
+ * wrong one is rejected with a 400, which silently dropped every turn onto the
+ * local extractor.
+ */
+function buildThinkingConfig(
+  model: string
+): Record<string, unknown> | null {
+  if (/gemini-3/i.test(model)) return { thinkingLevel: "low" };
+  if (/gemini-2\.5/i.test(model)) return { thinkingBudget: 0 };
+  return null;
+}
 
 function getGeminiConfig(): { apiKey: string; model: string } | null {
   const env = (globalThis as typeof globalThis & {
@@ -92,7 +107,7 @@ function buildSystemInstruction(knownTypes: string[]): string {
     "Do NOT ask any clarification questions or ask the user for missing fields. Always fill in sensible, realistic defaults for any fields that the user did not explicitly specify.",
     "Allowed keys and meanings in the event object:",
     'title: Catchy, clear event title (string, max 150 chars).',
-    'description: Engaging, rich description explaining the purpose, highlights, and details of the event (minimum 30 words, complete sentences).',
+    'description: Engaging, rich description explaining the purpose, highlights, target audience, and details of the event (minimum 40 to 80 words, complete sentences). You MUST ALWAYS write this description and never leave it empty.',
     `type: Best matching event category from: ${types}.`,
     'mode: "online", "offline", or "hybrid". If not stated, default to "offline" (or "online" if virtual keywords are mentioned).',
     'start_date: Start date and time in ISO 8601 format. Resolve relative dates like "tomorrow", "this weekend", "next Friday" relative to the current date. If no date is given, default to next Saturday at 10:00 AM.',
@@ -105,6 +120,123 @@ function buildSystemInstruction(knownTypes: string[]): string {
     'max_team_size: integer >= 1 (default 1 for solo, or 4 for team).',
     "In 'reply', give a cheerful, concise 1-2 sentence summary confirming the event has been generated and is ready to review or publish.",
   ].join(" ");
+}
+
+/**
+ * Intelligent fallback generator that auto-evaluates the event context (title,
+ * category, mode, location, prompt) and crafts a rich, high-quality description
+ * whenever the AI model is overloaded, rate-limited, or in local mode.
+ */
+export function evaluateAndGenerateDescription(params: {
+  title?: string;
+  type?: string;
+  mode?: string;
+  location?: string;
+  prompt?: string;
+}): string {
+  const title = (params.title || "Special Event").trim();
+  const category = (params.type || "").trim();
+  const mode = (params.mode || "offline").toLowerCase();
+  const location = (params.location || "").trim();
+  const prompt = (params.prompt || "").trim();
+
+  const venueInfo =
+    mode === "online"
+      ? "hosted live online with interactive sessions"
+      : location
+      ? `taking place in person at ${location}`
+      : "taking place in person at our designated venue";
+
+  const lowerCat = category.toLowerCase();
+  const lowerPrompt = prompt.toLowerCase();
+
+  if (
+    lowerCat.includes("hackathon") ||
+    lowerPrompt.includes("hackathon") ||
+    lowerPrompt.includes("coding") ||
+    lowerPrompt.includes("codeathon") ||
+    lowerPrompt.includes("ideathon")
+  ) {
+    return `Get ready for ${title}! Join passionate developers, designers, and innovators for an intensive, high-energy building sprint. Participants will collaborate in teams to brainstorm groundbreaking ideas, build functional prototypes, and pitch impactful solutions. Whether you are an experienced hacker or developing your very first product, you will find hands-on mentorship, peer learning, and exciting opportunities for awards and recognition.`;
+  }
+
+  if (
+    lowerCat.includes("conference") ||
+    lowerPrompt.includes("conference") ||
+    lowerPrompt.includes("summit") ||
+    lowerPrompt.includes("symposium") ||
+    lowerPrompt.includes("tech talk")
+  ) {
+    return `Welcome to ${title}, a premier gathering ${venueInfo} designed to unite industry professionals, creators, and technology leaders. Immerse yourself in insightful keynote discussions, forward-looking deep dives, and meaningful peer networking. Attendees will gain actionable insights, innovative perspectives, and valuable connections to accelerate their journey.`;
+  }
+
+  if (
+    lowerCat.includes("training") ||
+    lowerCat.includes("academic") ||
+    lowerPrompt.includes("workshop") ||
+    lowerPrompt.includes("masterclass") ||
+    lowerPrompt.includes("bootcamp") ||
+    lowerPrompt.includes("seminar") ||
+    lowerPrompt.includes("training") ||
+    lowerPrompt.includes("course")
+  ) {
+    return `Elevate your skillset with ${title}! This comprehensive, hands-on workshop is crafted to deliver practical understanding and direct application. Guided by experienced mentors, attendees will explore core principles, learn real-world techniques, and take part in interactive exercises designed to level up their capabilities.`;
+  }
+
+  if (
+    lowerCat.includes("corporate") ||
+    lowerPrompt.includes("corporate") ||
+    lowerPrompt.includes("annual day") ||
+    lowerPrompt.includes("offsite") ||
+    lowerPrompt.includes("townhall")
+  ) {
+    return `Join us for ${title}, a curated gathering focused on strategic alignment, milestone achievements, and team collaboration. This session brings together stakeholders and team members to celebrate collective progress, exchange key insights, and set clear goals for upcoming ventures in an engaging atmosphere.`;
+  }
+
+  if (
+    lowerCat.includes("community") ||
+    lowerCat.includes("nonprofit") ||
+    lowerPrompt.includes("charity") ||
+    lowerPrompt.includes("donation") ||
+    lowerPrompt.includes("volunteer") ||
+    lowerPrompt.includes("ngo") ||
+    lowerPrompt.includes("drive")
+  ) {
+    return `Be part of positive change with ${title}! A community-powered gathering bringing volunteers, partners, and supporters together to make a real difference. Connect with dedicated individuals, share impactful moments, and contribute directly towards building a stronger, more supportive community.`;
+  }
+
+  if (
+    lowerCat.includes("sports") ||
+    lowerCat.includes("recreational") ||
+    lowerPrompt.includes("cricket") ||
+    lowerPrompt.includes("football") ||
+    lowerPrompt.includes("tournament") ||
+    lowerPrompt.includes("marathon") ||
+    lowerPrompt.includes("match")
+  ) {
+    return `Experience the excitement of ${title}! An energetic sporting gathering celebrating teamwork, fitness, and friendly competition. Whether participating as a competitor or cheering from the sidelines, join us for a day of spirited challenges, athletic achievements, and memorable moments.`;
+  }
+
+  if (
+    lowerCat.includes("exhibition") ||
+    lowerPrompt.includes("expo") ||
+    lowerPrompt.includes("trade show") ||
+    lowerPrompt.includes("fair")
+  ) {
+    return `Explore future opportunities at ${title}! A dynamic showcase ${venueInfo} featuring innovative exhibits, interactive demonstrations, and valuable networking with leading brands, creators, and industry pioneers. Discover the latest products and gain firsthand insights into cutting-edge trends.`;
+  }
+
+  if (
+    lowerCat.includes("wedding") ||
+    lowerCat.includes("personal") ||
+    lowerPrompt.includes("party") ||
+    lowerPrompt.includes("celebration") ||
+    lowerPrompt.includes("reception")
+  ) {
+    return `Join us as we celebrate ${title}! A heartwarming occasion bringing friends, family, and loved ones together to celebrate shared joy, meaningful bonds, and unforgettable memories. Come celebrate this special milestone with warmth, festivities, and great company.`;
+  }
+
+  return `Welcome to ${title}, an exciting and engaging event ${venueInfo}! Designed to foster collaboration, learning, and memorable experiences, this gathering offers attendees curated sessions, thought-provoking discussions, and prime networking opportunities. Reserve your spot today to connect with peers and be part of an unforgettable experience.`;
 }
 
 const RESPONSE_SCHEMA = {
@@ -130,6 +262,7 @@ const RESPONSE_SCHEMA = {
         min_team_size: { type: "integer" },
         max_team_size: { type: "integer" },
       },
+      required: ["title", "description", "type", "mode"],
     },
   },
   required: ["reply", "event"],
@@ -337,14 +470,20 @@ async function callGemini(
   ];
 
   const url = `${GEMINI_BASE_URL}/${gemini.model}:generateContent?key=${gemini.apiKey}`;
+  const generationConfig: Record<string, unknown> = {
+    temperature: 0.2,
+    responseMimeType: "application/json",
+    responseSchema: RESPONSE_SCHEMA,
+  };
+  const thinkingConfig = buildThinkingConfig(gemini.model);
+  if (thinkingConfig) {
+    generationConfig.thinkingConfig = thinkingConfig;
+  }
+
   const payload = {
     system_instruction: { parts: [{ text: buildSystemInstruction(input.knownTypes || []) }] },
     contents,
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-    },
+    generationConfig,
   };
 
   // The flash endpoint returns 429/503 under load. Retrying with backoff keeps a
@@ -352,7 +491,7 @@ async function callGemini(
   let lastError: unknown;
   for (let attempt = 0; attempt <= GEMINI_MAX_ATTEMPTS; attempt += 1) {
     try {
-      const response = await axios.post(url, payload, { timeout: 30000 });
+      const response = await axios.post(url, payload, { timeout: GEMINI_TIMEOUT_MS });
 
       const candidateText =
         response.data?.candidates?.[0]?.content?.parts
@@ -445,14 +584,20 @@ export class AiEventService {
       }
     }
 
-    // The provider writes better copy, but it is not always reachable. Without these
-    // fallbacks a rate-limited provider left the title as "New Event", which is what
-    // users saw whenever the offline extractor kicked in.
-    if (!patch.description && localPatch.description) {
-      patch.description = localPatch.description;
-    }
+    // Ensure title is present
     if (!patch.title && localPatch.title) {
       patch.title = localPatch.title;
+    }
+
+    // Always auto-evaluate and fill a rich, relevant description for the event
+    if (!patch.description || patch.description.trim().length < 20) {
+      patch.description = evaluateAndGenerateDescription({
+        title: patch.title || localPatch.title || "Special Event",
+        type: patch.type || localPatch.type,
+        mode: patch.mode || localPatch.mode,
+        location: patch.location || localPatch.location,
+        prompt: message,
+      });
     }
 
     const merged = mergeDraft(incomingDraft, patch);
@@ -478,10 +623,15 @@ export class AiEventService {
         // case, so this is only a last resort.
         "New Event",
       description:
-        merged.description ||
-        (message.length >= 20
-          ? message
-          : "Add a short description so attendees know what to expect."),
+        merged.description && String(merged.description).trim().length >= 20
+          ? String(merged.description).trim()
+          : evaluateAndGenerateDescription({
+              title: typeof merged.title === "string" ? merged.title : "Special Event",
+              type: typeof merged.type === "string" ? merged.type : undefined,
+              mode: typeof merged.mode === "string" ? merged.mode : (saysOnline ? "online" : "offline"),
+              location: (merged.location || localPatch.location || "") as string,
+              prompt: message,
+            }),
       // Left undefined on purpose. Defaulting to "Technical Conferences" put a
       // confidently wrong category in front of the user; an unknown category is
       // reported as a missing field so the assistant asks instead.
@@ -508,11 +658,13 @@ export class AiEventService {
           : `I've captured what I could for "${draft.title}".`;
     }
 
-    // The questions are always spelled out in the chat bubble, not just returned as
-    // data, so the user is told exactly what is still needed.
-    if (questions.length > 0) {
-      reply = `${reply}\n\n${questions.map((q) => `- ${q}`).join("\n")}`;
-    } else {
+    // Only append clarification questions if not already present in the AI reply
+    const newQuestions = questions.filter(
+      (q) => !reply.toLowerCase().includes(q.toLowerCase().slice(0, 25))
+    );
+    if (newQuestions.length > 0 && source === "local") {
+      reply = `${reply}\n\n${newQuestions.map((q) => `- ${q}`).join("\n")}`;
+    } else if (questions.length === 0 && !reply.toLowerCase().includes("ready")) {
       reply = `${reply} All details are ready for you to review or publish!`;
     }
 

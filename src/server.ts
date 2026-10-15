@@ -18,9 +18,10 @@ import passport from "passport";
 import { PrismaClient } from "@prisma/client";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { setupQuizSockets } from "./socket/quiz.socket";
 
 // Passport configuration
-require("./config/passport");
+import "./config/passport";
 
 // Import Routes
 import authRoutes from "./routes/auth.routes";
@@ -72,11 +73,34 @@ app.use(
 // CORS
 // =========================================
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+  "https://community-connect-frontend-5oe1-beta.vercel.app",
+  config.FRONTEND_URL,
+].filter(Boolean);
+
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow all origins (reflection) for full cross-origin compatibility
-      callback(null, true);
+      // Allow requests without origin (Postman, mobile apps, curl)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const cleanOrigin = origin.replace(/\/$/, "");
+
+      if (
+        allowedOrigins.includes(cleanOrigin) ||
+        /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(cleanOrigin)
+      ) {
+        return callback(null, true);
+      }
+
+      console.log("❌ Blocked by CORS:", origin);
+      return callback(null, false);
     },
 
     credentials: true,
@@ -303,6 +327,10 @@ app.use(
 
 app.use(
   "/api/locations",
+  locationRoutes
+);
+app.use(
+  "/api/location",
   locationRoutes
 );
 

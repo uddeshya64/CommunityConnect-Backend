@@ -4,16 +4,342 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL") // Uses the connection pool
-  directUrl = env("DIRECT_URL") // Uses the direct connection for migrations
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// --- Enums ---
+model EventType {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique @db.VarChar(50)
+  is_system  Boolean  @default(false)
+  created_by Int?
+  created_at DateTime @default(now())
+  creator    User?    @relation("UserEventTypes", fields: [created_by], references: [id])
+  events     Event[]
 
-enum EventType {
-  hackathon
-  workshop
-  meetup
+  @@map("event_types")
+}
+
+model User {
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  email               String               @unique
+  phone               String?
+  password_hash       String?
+  skills              String[]
+  linkedin            String?
+  github              String?
+  profession          String?
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  avatar_url          String?
+  bio                 String?
+  location            String?
+  fcm_token           String?
+  billing_info        Json?                @default("{}")
+  branding_config     Json?                @default("{}")
+  security_config     Json?                @default("{}")
+  subscription_status String               @default("free")
+  tenant_policy       Json?                @default("{}")
+  google_id           String?              @unique
+  user_settings       Json?                @default("{}")
+  custom_event_types  EventType[]          @relation("UserEventTypes")
+  event_roles         EventUserRole[]
+  events_created      Event[]              @relation("CreatedEvents")
+  mentor_assignments  MentorAssignment[]
+  registrations       Registration[]
+  submissions         Submission[]
+  team_memberships    TeamMember[]
+  teams_led           Team[]               @relation("TeamLeader")
+  sessions            UserSession[]
+  push_subscriptions  PushSubscription[]
+  agendas             UserAgenda[]
+  saved_events        SavedEvent[]
+  tasks_assigned      EventStaffTask[]     @relation("TaskAssignedTo")
+  tasks_created       EventStaffTask[]     @relation("TaskCreatedBy")
+  announcements_authored EventAnnouncement[] @relation("AnnouncementAuthor")
+  announcement_reactions AnnouncementReaction[]
+  quiz_responses         QuizResponse[]
+  quiz_leaderboards      QuizLeaderboard[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  refreshToken String
+  sessionId    String   @unique
+  expiresAt    DateTime
+  device       String?
+  browser      String?
+  ipAddress    String?
+  lastActive   DateTime? @default(now())
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+model Event {
+  id                 Int                   @id @default(autoincrement())
+  title              String                @db.VarChar(150)
+  description        String
+  mode               EventMode
+  banner_url         String?
+  logo_url           String?
+  start_date         DateTime
+  end_date           DateTime
+  registration_type  String
+  registration_fee   Decimal
+  max_team_size      Int
+  min_team_size      Int
+  rewards            Json?                 @default("{}")
+  created_by         Int
+  created_at         DateTime              @default(now())
+  updated_at         DateTime              @updatedAt
+  location           String?
+  type_id            Int
+  capacity           Int                   @default(0)
+  custom_fields      Json?                 @default("{}")
+  custom_form_schema Json?                 @default("[]")
+  announcements      EventAnnouncement[]
+  role_definitions   EventRoleDefinition[]
+  staff_invites      EventStaffInvite[]
+  timelines          EventTimeline[]
+  user_roles         EventUserRole[]
+  creator            User                  @relation("CreatedEvents", fields: [created_by], references: [id], onDelete: Cascade)
+  type               EventType             @relation(fields: [type_id], references: [id])
+  mentor_assignments MentorAssignment[]
+  registrations      Registration[]
+  submissions        Submission[]
+  teams              Team[]
+  agendas            UserAgenda[]
+  saved_by           SavedEvent[]
+  staff_tasks        EventStaffTask[]
+  quizzes            Quiz[]
+
+  @@map("events")
+}
+
+model EventUserRole {
+  id                   Int                 @id @default(autoincrement())
+  event_id             Int
+  user_id              Int
+  assigned_at          DateTime            @default(now())
+  permissions_override Json?
+  role_id              Int
+  event                Event               @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  role                 EventRoleDefinition @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  user                 User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, user_id])
+  @@map("event_user_roles")
+}
+
+model Registration {
+  id             Int                @id @default(autoincrement())
+  event_id       Int
+  user_id        Int
+  team_id        Int?
+  status         RegistrationStatus
+  created_at     DateTime           @default(now())
+  checked_in     Boolean            @default(false)
+  checked_in_at  DateTime?
+  checked_in_by  Int?
+  ticket_code    String?            @unique @db.VarChar(100)
+  form_responses Json?
+  payments       Payment[]
+  event          Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  team           Team?              @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user           User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("registrations")
+}
+
+model Payment {
+  id              Int           @id @default(autoincrement())
+  registration_id Int
+  amount          Decimal
+  currency        String
+  provider        String
+  status          PaymentStatus
+  transaction_ref String?       @db.VarChar(100)
+  created_at      DateTime      @default(now())
+  registration    Registration  @relation(fields: [registration_id], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model TeamInvite {
+  id         Int      @id @default(autoincrement())
+  team_id    Int
+  email      String
+  token      String   @unique
+  status     String   @default("pending")
+  created_at DateTime @default(now())
+  expires_at DateTime
+  team       Team     @relation(fields: [team_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_id, email])
+  @@map("team_invites")
+}
+
+model Team {
+  id                 Int                @id @default(autoincrement())
+  name               String
+  event_id           Int
+  leader_id          Int
+  status             TeamStatus
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  mentor_assignments MentorAssignment[]
+  registrations      Registration[]
+  submissions        Submission[]
+  invites            TeamInvite[]
+  members            TeamMember[]
+  event              Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  leader             User               @relation("TeamLeader", fields: [leader_id], references: [id], onDelete: Cascade)
+
+  @@map("teams")
+}
+
+model TeamMember {
+  team_id Int
+  user_id Int
+  team    Team @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user    User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([team_id, user_id])
+  @@map("team_members")
+}
+
+model Submission {
+  id           Int      @id @default(autoincrement())
+  event_id     Int
+  team_id      Int
+  user_id      Int
+  title        String   @db.VarChar(150)
+  repo_url     String?
+  submitted_at DateTime @default(now())
+  event        Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  team         Team     @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("submissions")
+}
+
+model MentorAssignment {
+  event_id  Int
+  mentor_id Int
+  team_id   Int
+  event     Event @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  mentor    User  @relation(fields: [mentor_id], references: [id], onDelete: Cascade)
+  team      Team  @relation(fields: [team_id], references: [id], onDelete: Cascade)
+
+  @@id([event_id, mentor_id, team_id])
+  @@map("mentor_assignments")
+}
+
+model EventAnnouncement {
+  id           Int                    @id @default(autoincrement())
+  event_id     Int
+  title        String?                @db.VarChar(200)
+  message      String                 @db.Text
+  target_group String                 @default("all") // 'all' | 'participants' | 'staff'
+  author_id    Int?
+  created_at   DateTime               @default(now())
+
+  event        Event                  @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  author       User?                  @relation("AnnouncementAuthor", fields: [author_id], references: [id], onDelete: SetNull)
+  reactions    AnnouncementReaction[]
+
+  @@map("event_announcements")
+}
+
+model AnnouncementReaction {
+  id              Int               @id @default(autoincrement())
+  announcement_id Int
+  user_id         Int
+  emoji           String            @db.VarChar(20)
+  created_at      DateTime          @default(now())
+
+  announcement    EventAnnouncement @relation(fields: [announcement_id], references: [id], onDelete: Cascade)
+  user            User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([announcement_id, user_id, emoji])
+  @@map("announcement_reactions")
+}
+
+model EventRoleDefinition {
+  id            Int                @id @default(autoincrement())
+  event_id      Int
+  name          String             @db.VarChar(50)
+  permissions   Json
+  is_system     Boolean            @default(false)
+  event         Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  staff_invites EventStaffInvite[]
+  users         EventUserRole[]
+
+  @@unique([event_id, name])
+  @@map("event_role_definitions")
+}
+
+model EventStaffInvite {
+  id         Int                 @id @default(autoincrement())
+  event_id   Int
+  email      String              @db.VarChar(255)
+  role_id    Int
+  token      String              @unique
+  status     String              @default("pending")
+  created_at DateTime            @default(now())
+  expires_at DateTime
+  event      Event               @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  role       EventRoleDefinition @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, email])
+  @@map("event_staff_invites")
+}
+
+model EventTimeline {
+  id            Int          @id @default(autoincrement())
+  event_id      Int
+  title         String       @db.VarChar(100)
+  speaker_name  String?      @db.VarChar(100)
+  description   String?
+  tags          String[]     @default([])
+  start_time    DateTime
+  end_time      DateTime?
+  location      String?
+  should_notify Boolean      @default(true)
+  is_notified   Boolean      @default(false)
+  event         Event        @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  agendas       UserAgenda[]
+
+  @@map("event_timelines")
+}
+
+model UserAgenda {
+  id          Int           @id @default(autoincrement())
+  user_id     Int
+  event_id    Int
+  timeline_id Int
+  status      AgendaStatus  @default(RECOMMENDED)
+  match_score Float
+  created_at  DateTime      @default(now())
+
+  user        User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event       Event         @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  timeline    EventTimeline @relation(fields: [timeline_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, timeline_id])
+  @@map("user_agendas")
+}
+
+enum AgendaStatus {
+  RECOMMENDED
+  ACCEPTED
+  DECLINED
 }
 
 enum EventMode {
@@ -41,193 +367,140 @@ enum TeamStatus {
   disqualified
 }
 
-// --- Models ---
-
-model User {
-  id            Int      @id @default(autoincrement())
-  name          String
-  email         String   @unique
-  phone         String? // 'number' is usually best stored as String to preserve formatting/leading zeros
-  password_hash String
-  skills        String[] // Array type
-  linkedin      String?
-  github        String?
-  profession    String?
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
-
-  // Relationships
-  events_created     Event[]            @relation("CreatedEvents")
-  event_roles        EventUserRole[]
-  registrations      Registration[]
-  teams_led          Team[]             @relation("TeamLeader")
-  team_memberships   TeamMember[]
-  submissions        Submission[]
-  mentor_assignments MentorAssignment[]
-
-  @@map("users")
-}
-
-model Event {
-  id                Int       @id @default(autoincrement())
-  title             String    @db.VarChar(150)
-  description       String
-  type              EventType
-  mode              EventMode
-  banner_url        String?
-  logo_url          String?
-  start_date        DateTime
-  end_date          DateTime
-  registration_type String
-  registration_fee  Decimal // 'number' for money is best as Decimal
-  max_team_size     Int
-  min_team_size     Int
-  rewards           Json // 'jsonb'
-  created_by        Int
-  created_at        DateTime  @default(now())
-  updated_at        DateTime  @updatedAt
-
-  // Relationships
-  creator            User                @relation("CreatedEvents", fields: [created_by], references: [id])
-  user_roles         EventUserRole[]
-  registrations      Registration[]
-  teams              Team[]
-  submissions        Submission[]
-  mentor_assignments MentorAssignment[]
-  announcements      EventAnnouncement[]
-
-  @@map("events")
-}
-
-model Role {
-  id   Int    @id @default(autoincrement())
-  name String @db.VarChar(50)
-
-  // Relationships
-  event_user_roles EventUserRole[]
-
-  @@map("roles")
-}
-
-model EventUserRole {
-  id          Int      @id @default(autoincrement())
-  event_id    Int
-  user_id     Int
-  role_id     Int
-  assigned_at DateTime @default(now())
-
-  // Relationships
-  event Event @relation(fields: [event_id], references: [id])
-  user  User  @relation(fields: [user_id], references: [id])
-  role  Role  @relation(fields: [role_id], references: [id])
-
-  @@map("event_user_roles")
-}
-
-model Registration {
-  id         Int                @id @default(autoincrement())
-  event_id   Int
-  user_id    Int
-  team_id    Int? // Optional, only for hackathons
-  status     RegistrationStatus
-  created_at DateTime           @default(now())
-
-  // Relationships
-  event    Event     @relation(fields: [event_id], references: [id])
-  user     User      @relation(fields: [user_id], references: [id])
-  team     Team?     @relation(fields: [team_id], references: [id])
-  payments Payment[]
-
-  @@map("registrations")
-}
-
-model Payment {
-  id              Int           @id @default(autoincrement())
-  registration_id Int
-  amount          Decimal
-  currency        String
-  provider        String
-  status          PaymentStatus
-  transaction_ref String?       @db.VarChar(100)
-  created_at      DateTime      @default(now())
-
-  // Relationships
-  registration Registration @relation(fields: [registration_id], references: [id])
-
-  @@map("payments")
-}
-
-model Team {
-  id         Int        @id @default(autoincrement())
-  name       String
-  event_id   Int
-  leader_id  Int
-  status     TeamStatus
-  created_at DateTime   @default(now())
-  updated_at DateTime   @updatedAt
-
-  // Relationships
-  event              Event              @relation(fields: [event_id], references: [id])
-  leader             User               @relation("TeamLeader", fields: [leader_id], references: [id])
-  registrations      Registration[]
-  members            TeamMember[]
-  submissions        Submission[]
-  mentor_assignments MentorAssignment[]
-
-  @@map("teams")
-}
-
-model TeamMember {
-  team_id Int
-  user_id Int
-
-  // Relationships
-  team Team @relation(fields: [team_id], references: [id])
-  user User @relation(fields: [user_id], references: [id])
-
-  @@id([team_id, user_id]) // Composite Primary Key
-  @@map("team_members")
-}
-
-model Submission {
-  id           Int      @id @default(autoincrement())
-  event_id     Int
-  team_id      Int
-  user_id      Int
-  title        String   @db.VarChar(150)
-  repo_url     String?
-  submitted_at DateTime @default(now())
-
-  // Relationships
-  event Event @relation(fields: [event_id], references: [id])
-  team  Team  @relation(fields: [team_id], references: [id])
-  user  User  @relation(fields: [user_id], references: [id])
-
-  @@map("submissions")
-}
-
-model MentorAssignment {
-  event_id  Int
-  mentor_id Int
-  team_id   Int
-
-  // Relationships
-  event  Event @relation(fields: [event_id], references: [id])
-  mentor User  @relation(fields: [mentor_id], references: [id])
-  team   Team  @relation(fields: [team_id], references: [id])
-
-  @@id([event_id, mentor_id, team_id]) // Composite PK
-  @@map("mentor_assignments")
-}
-
-model EventAnnouncement {
+model PushSubscription {
   id         Int      @id @default(autoincrement())
-  event_id   Int
-  message    String
+  user_id    Int
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  device     String?  // 'android' | 'ios' | 'windows' | 'mac' | 'browser'
+  user_agent String?
   created_at DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  // Relationships
-  event Event @relation(fields: [event_id], references: [id])
+  @@map("push_subscriptions")
+}
 
-  @@map("event_announcements")
+model SavedEvent {
+  user_id    Int
+  event_id   Int
+  saved_at   DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, event_id])
+  @@map("saved_events")
+}
+
+model EventStaffTask {
+  id             Int       @id @default(autoincrement())
+  event_id       Int
+  title          String    @db.VarChar(200)
+  description    String?   @db.Text
+  priority       String    @default("medium") // 'low' | 'medium' | 'high' | 'urgent'
+  status         String    @default("pending") // 'pending' | 'completed'
+  assigned_to_id Int
+  created_by_id  Int
+  due_date       DateTime?
+  completed_at   DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  event          Event     @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  assigned_to    User      @relation("TaskAssignedTo", fields: [assigned_to_id], references: [id], onDelete: Cascade)
+  created_by     User      @relation("TaskCreatedBy", fields: [created_by_id], references: [id], onDelete: Cascade)
+
+  @@map("event_staff_tasks")
+}
+
+model Quiz {
+  id          Int       @id @default(autoincrement())
+  event_id    Int
+  title       String    @db.VarChar(150)
+  description String?
+  status      String    @default("DRAFT") // DRAFT, LIVE, COMPLETED
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  
+  event        Event             @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  questions    Question[]
+  sessions     QuizSession[]
+  leaderboards QuizLeaderboard[]
+  
+  @@map("quizzes")
+}
+
+model Question {
+  id          Int       @id @default(autoincrement())
+  quiz_id     Int
+  text        String    @db.VarChar(500)
+  time_limit  Int       @default(30) // in seconds
+  points      Int       @default(1000)
+  order       Int       @default(0)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  
+  quiz        Quiz      @relation(fields: [quiz_id], references: [id], onDelete: Cascade)
+  options     Option[]
+  responses   QuizResponse[]
+  
+  @@map("questions")
+}
+
+model Option {
+  id          Int       @id @default(autoincrement())
+  question_id Int
+  text        String    @db.VarChar(200)
+  is_correct  Boolean   @default(false)
+  
+  question    Question  @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  responses   QuizResponse[]
+  
+  @@map("options")
+}
+
+model QuizSession {
+  id                Int       @id @default(autoincrement())
+  quiz_id           Int
+  status            String    @default("WAITING") // WAITING, IN_PROGRESS, COMPLETED
+  current_question  Int?      // ID of current question
+  started_at        DateTime?
+  ended_at          DateTime?
+  
+  quiz              Quiz      @relation(fields: [quiz_id], references: [id], onDelete: Cascade)
+  
+  @@map("quiz_sessions")
+}
+
+model QuizResponse {
+  id              Int       @id @default(autoincrement())
+  user_id         Int
+  question_id     Int
+  option_id       Int?
+  points_awarded  Int       @default(0)
+  time_taken      Float     @default(0) // seconds taken to answer
+  created_at      DateTime  @default(now())
+  
+  user            User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  question        Question  @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  option          Option?   @relation(fields: [option_id], references: [id], onDelete: Cascade)
+  
+  @@unique([user_id, question_id])
+  @@map("quiz_responses")
+}
+
+model QuizLeaderboard {
+  id          Int       @id @default(autoincrement())
+  quiz_id     Int
+  user_id     Int
+  score       Int       @default(0)
+  rank        Int?
+  updated_at  DateTime  @updatedAt
+  
+  quiz        Quiz      @relation(fields: [quiz_id], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@unique([quiz_id, user_id])
+  @@map("quiz_leaderboards")
 }
