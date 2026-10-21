@@ -21,6 +21,7 @@ export const EventController = {
       const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
       const search = req.query.search as string;
+      const upcomingOnly = req.query.upcomingOnly === 'true';
       const userId = req.user?.id;
 
       const result = await EventService.getAllEvents(page, limit, search, userId);
