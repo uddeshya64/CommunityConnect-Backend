@@ -13,12 +13,46 @@ export const EventTimelineController = {
         return res.status(400).json({ error: "Invalid event ID" });
       }
 
+      const total = await prisma.eventTimeline.count({
+        where: { event_id: eventId }
+      });
+
+      const pageParam = req.query.page;
+      const limitParam = req.query.limit;
+
+      if (pageParam !== undefined || limitParam !== undefined) {
+        const page = Number(pageParam) || 1;
+        const limit = Number(limitParam) || 10;
+        const skip = (Math.max(1, page) - 1) * limit;
+
+        const timelines = await prisma.eventTimeline.findMany({
+          where: { event_id: eventId },
+          orderBy: { start_time: 'asc' },
+          skip,
+          take: limit
+        });
+
+        const hasMore = skip + timelines.length < total;
+
+        return res.json({
+          success: true,
+          data: timelines,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+            hasMore
+          }
+        });
+      }
+
       const timelines = await prisma.eventTimeline.findMany({
         where: { event_id: eventId },
         orderBy: { start_time: 'asc' }
       });
 
-      res.json({ success: true, data: timelines });
+      res.json({ success: true, data: timelines, total });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

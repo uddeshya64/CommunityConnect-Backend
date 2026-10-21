@@ -37,6 +37,7 @@ import locationRoutes from "./routes/location.routes";
 import organizerConfigRoutes from "./routes/organizerConfig.routes";
 import imageRoutes from "./routes/image";
 import registrationRoutes from "./routes/registeration.routes";
+import aiEventRoutes from "./routes/aiEvent.routes";
 import { EventSchedulerService } from "./services/eventScheduler.service";
 import agendaRoutes from "./routes/agenda.routes";
 import quizRoutes from "./routes/quiz.routes";
@@ -63,6 +64,8 @@ const PORT = Number(config.PORT) || 5000;
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
   })
 );
 
@@ -119,6 +122,14 @@ app.use(
       "Origin",
       "Access-Control-Allow-Origin",
       "Access-Control-Allow-Headers",
+      "Access-Control-Allow-Methods",
+      "X-CSV-Filename",
+    ],
+
+    exposedHeaders: [
+      "Content-Disposition",
+      "X-CSV-Filename",
+      "Content-Length",
     ],
 
     optionsSuccessStatus: 200,
@@ -131,13 +142,14 @@ app.use(
 
 app.use(
   express.json({
-    limit: "10kb",
+    limit: "10mb",
   })
 );
 
 app.use(
   express.urlencoded({
     extended: true,
+    limit: "10mb",
   })
 );
 
@@ -250,6 +262,15 @@ app.use(
 );
 
 // =========================================
+// AI EVENT CREATOR ROUTES (voice -> AI -> CSV / DB)
+// =========================================
+
+app.use(
+  "/api/ai-events",
+  aiEventRoutes
+);
+
+// =========================================
 // QUIZ ROUTES
 // =========================================
 
@@ -306,6 +327,10 @@ app.use(
 
 app.use(
   "/api/locations",
+  locationRoutes
+);
+app.use(
+  "/api/location",
   locationRoutes
 );
 
@@ -381,8 +406,6 @@ const startServer = async () => {
       },
       allowEIO3: true
     });
-    setupQuizSockets(io);
-
     // Start Express server
     httpServer.listen(PORT, () => {
       console.log(

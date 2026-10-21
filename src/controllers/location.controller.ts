@@ -32,5 +32,35 @@ export class LocationController {
         }
     }
 
-    
+    // Reverse geocode accurate GPS coordinates (lat, lng) to real address
+    static async reverse(req: Request, res: Response) {
+        try {
+            const latStr = req.query.lat as string;
+            const lngStr = req.query.lng as string;
+
+            const lat = Number(latStr);
+            const lng = Number(lngStr);
+
+            if (Number.isNaN(lat) || Number.isNaN(lng)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Valid 'lat' and 'lng' numeric query parameters are required.",
+                });
+            }
+
+            const location = await LocationService.reverseGeocode(lat, lng);
+
+            return res.status(200).json({
+                success: true,
+                data: location,
+            });
+        } catch (error) {
+            console.error("[LOCATION_CONTROLLER] Reverse geocode error:", error);
+
+            return res.status(500).json({
+                success: false,
+                message: "Failed to resolve coordinates to location.",
+            });
+        }
+    }
 }
