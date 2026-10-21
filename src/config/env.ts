@@ -37,7 +37,10 @@ const envSchema = z.object({
 
   // AI event creator (optional - a deterministic local extractor is used
   // when no key is configured, so the feature keeps working offline)
-  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_API_KEY: z.preprocess(
+    (val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
+    z.string().min(1).optional()
+  ),
   // `gemini-flash-latest` is an alias that always points at the current flash
   // model. Pinned versions such as gemini-2.0-flash get retired and then every
   // request 404s, which silently downgrades the AI to the local extractor.
