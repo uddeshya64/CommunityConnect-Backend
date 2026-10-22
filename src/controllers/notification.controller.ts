@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { PushService } from '../services/push.service';
+import { config } from '../config/env';
 
 const prisma = new PrismaClient();
 
@@ -227,8 +228,8 @@ export const NotificationController = {
         select: { name: true, email: true },
       });
 
-      const frontendUrl = "https://community-connect-frontend-5oe1-beta.vercel.app";
-      const targetUrl = `${frontendUrl.replace(/\/$/, "")}/notifications`;
+      const frontendUrl = (config.FRONTEND_URL || process.env.FRONTEND_URL || "http://localhost:3001").replace(/\/$/, "");
+      const targetUrl = `${frontendUrl}/notifications`;
 
       const result = await PushService.sendPushToUser(userId, {
         title: "CommunityConnect",

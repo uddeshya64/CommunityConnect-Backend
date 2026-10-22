@@ -84,6 +84,10 @@ const EventBaseObject = z.object({
     .array(CustomFieldDefinition)
     .optional(),
 
+  registration_form_schema: z
+    .array(z.any())
+    .optional(),
+
   location: z
     .string()
     .optional(),

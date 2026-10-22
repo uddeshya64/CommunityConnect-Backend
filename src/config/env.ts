@@ -26,7 +26,9 @@ const envSchema = z.object({
   BREVO_SENDER_EMAIL: z.string().email(),
   BREVO_SENDER_NAME: z.string().default("CommunityConnect"),
 
-  FRONTEND_URL: z.string().url(),
+  FRONTEND_URL: z.string().url().default("http://localhost:3001"),
+  ALLOWED_ORIGINS: z.string().optional(),
+  GOOGLE_CALLBACK_URL: z.string().optional().default("http://localhost:3000/api/auth/google/callback"),
 
   // Razorpay
   RAZORPAY_KEY_ID: z.string().min(1),
@@ -37,7 +39,10 @@ const envSchema = z.object({
 
   // AI event creator (optional - a deterministic local extractor is used
   // when no key is configured, so the feature keeps working offline)
-  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_API_KEY: z.preprocess(
+    (val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
+    z.string().min(1).optional()
+  ),
   // `gemini-flash-latest` is an alias that always points at the current flash
   // model. Pinned versions such as gemini-2.0-flash get retired and then every
   // request 404s, which silently downgrades the AI to the local extractor.

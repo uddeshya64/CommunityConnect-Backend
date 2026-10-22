@@ -52,6 +52,15 @@ export interface EventDraftPatch {
   rewards?: Record<string, unknown>;
   custom_fields?: Record<string, unknown>;
   custom_form_schema?: unknown[];
+  registration_form_schema?: Array<{
+    id?: string;
+    key?: string;
+    label: string;
+    type: string;
+    required?: boolean;
+    options?: string[];
+    is_fixed?: boolean;
+  }>;
 }
 
 /** Values still unknown / empty during the conversation. */

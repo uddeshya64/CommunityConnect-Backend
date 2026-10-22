@@ -90,8 +90,18 @@ export class EventService {
         title, description, type, mode, banner_url, logo_url,
         start_date, end_date, registration_type, registration_fee,
         max_team_size, min_team_size, capacity, location, rewards,
-         custom_fields, custom_form_schema,  // NEW: template-specific fields (speakers, prizes, RSVP deadline, etc.)
+        custom_fields, custom_form_schema, registration_form_schema,
       } = data;
+
+      // Ensure registration_form_schema is embedded into custom_fields if provided
+      const mergedCustomFields = {
+        ...(custom_fields || {}),
+        ...(registration_form_schema
+          ? { registration_form_schema }
+          : custom_fields?.registration_form_schema
+          ? { registration_form_schema: custom_fields.registration_form_schema }
+          : {}),
+      };
 
       // Find or create the event type (case-insensitive)
       let eventType = await tx.eventType.findFirst({
@@ -128,7 +138,7 @@ export class EventService {
           capacity: capacity ?? 0,
           location: location ?? undefined,
           rewards: rewards ?? undefined,
-          custom_fields: custom_fields ?? undefined, // NEW
+          custom_fields: Object.keys(mergedCustomFields).length > 0 ? mergedCustomFields : undefined,
           custom_form_schema: custom_form_schema ?? undefined,
           created_by: userId,
         }
