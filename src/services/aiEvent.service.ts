@@ -118,7 +118,8 @@ function buildSystemInstruction(knownTypes: string[]): string {
     'registration_fee: Entry fee as number (default 0 for free entry).',
     'min_team_size: integer >= 1 (default 1).',
     'max_team_size: integer >= 1 (default 1 for solo, or 4 for team).',
-    "In 'reply', give a cheerful, concise 1-2 sentence summary confirming the event has been generated and is ready to review or publish.",
+    'registration_form_schema: Array of custom attendee questionnaire questions to ask during checkout registration. Fixed profile fields Full Name, Email Address, and Phone Number are already mandatory so DO NOT include them. Generate relevant questions for this event type or follow any user prompt requesting specific questions (e.g., college/university, graduation year, branch/stream, resume link, why join, dietary preference, t-shirt size, github url, portfolio). Each question object must have: key (snake_case string), label (clear question title), type ("text" | "textarea" | "number" | "select" | "checkbox"), required (boolean), and options (array of strings if type is "select").',
+    "In 'reply', give a cheerful, concise 1-2 sentence summary confirming the event and attendee questionnaire have been generated and are ready to review or publish.",
   ].join(" ");
 }
 
@@ -261,6 +262,26 @@ const RESPONSE_SCHEMA = {
         registration_fee: { type: "number" },
         min_team_size: { type: "integer" },
         max_team_size: { type: "integer" },
+        registration_form_schema: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              key: { type: "string" },
+              label: { type: "string" },
+              type: {
+                type: "string",
+                enum: ["text", "textarea", "number", "select", "checkbox"],
+              },
+              required: { type: "boolean" },
+              options: {
+                type: "array",
+                items: { type: "string" },
+              },
+            },
+            required: ["label", "type"],
+          },
+        },
       },
       required: ["title", "description", "type", "mode"],
     },
@@ -434,6 +455,46 @@ export function normaliseExtraction(
     const end = new Date(patch.end_date).getTime();
     if (!Number.isNaN(start) && !Number.isNaN(end) && end <= start) {
       patch.end_date = new Date(start + 3 * 60 * 60 * 1000).toISOString();
+    }
+  }
+
+  if (Array.isArray(source.registration_form_schema)) {
+    const validTypes = ["text", "textarea", "number", "select", "checkbox"];
+    const fixedKeys = new Set(["name", "full_name", "email", "email_address", "phone", "phone_number"]);
+
+    const fields = source.registration_form_schema
+      .filter((item: any) => item && typeof item === "object")
+      .map((item: any, index: number) => {
+        const label = String(item.label || item.key || "").trim();
+        const key = String(item.key || label)
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 30) || `custom_${index + 1}`;
+        const type = validTypes.includes(String(item.type).toLowerCase())
+          ? String(item.type).toLowerCase()
+          : "text";
+        const required = Boolean(item.required);
+        let options: string[] | undefined = undefined;
+        if (type === "select") {
+          const parsedOptions = Array.isArray(item.options)
+            ? item.options.map((o: unknown) => String(o).trim()).filter(Boolean)
+            : [];
+          options = parsedOptions.length > 0 ? parsedOptions : ["Option 1", "Option 2"];
+        }
+        return {
+          id: item.id || `reg_${Date.now()}_${index + 1}`,
+          key,
+          label,
+          type,
+          required,
+          options,
+        };
+      })
+      .filter((item: any) => item.label && !fixedKeys.has(item.key));
+
+    if (fields.length > 0) {
+      patch.registration_form_schema = fields;
     }
   }
 

@@ -26,7 +26,9 @@ const envSchema = z.object({
   BREVO_SENDER_EMAIL: z.string().email(),
   BREVO_SENDER_NAME: z.string().default("CommunityConnect"),
 
-  FRONTEND_URL: z.string().url(),
+  FRONTEND_URL: z.string().url().default("http://localhost:3001"),
+  ALLOWED_ORIGINS: z.string().optional(),
+  GOOGLE_CALLBACK_URL: z.string().optional().default("http://localhost:3000/api/auth/google/callback"),
 
   // Razorpay
   RAZORPAY_KEY_ID: z.string().min(1),
