@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const config = {
-  PORT: process.env.PORT || 5000,
+  PORT: process.env.PORT || 3000,
 
   JWT_SECRET:
     process.env.JWT_SECRET || "",
@@ -20,7 +20,7 @@ const config = {
 
   FRONTEND_URL:
     process.env.FRONTEND_URL ||
-    "https://community-connect-frontend-5oe1-beta.vercel.app",
+    "http://localhost:3001",
 };
 
 export default config;

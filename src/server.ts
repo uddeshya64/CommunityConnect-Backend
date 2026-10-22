@@ -73,14 +73,21 @@ app.use(
 // CORS
 // =========================================
 
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "http://127.0.0.1:3000",
-  "http://127.0.0.1:3001",
-  "https://community-connect-frontend-5oe1-beta.vercel.app",
-  config.FRONTEND_URL,
-].filter(Boolean);
+const envOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(
+  new Set([
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    config.FRONTEND_URL ? config.FRONTEND_URL.replace(/\/$/, "") : "",
+    ...envOrigins,
+  ])
+).filter(Boolean);
 
 app.use(
   cors({
@@ -406,6 +413,8 @@ const startServer = async () => {
       },
       allowEIO3: true
     });
+    setupQuizSockets(io);
+
     // Start Express server
     httpServer.listen(PORT, () => {
       console.log(

@@ -52,6 +52,17 @@ export class CheckoutService {
       }
     }
 
+    // Organizers and staff members cannot register as attendees in their own event
+    if (event.created_by === userId) {
+      throw new Error("As the organizer of this event, you cannot register as an attendee.");
+    }
+    const staffRole = await prisma.eventUserRole.findUnique({
+      where: { event_id_user_id: { event_id: eventId, user_id: userId } }
+    });
+    if (staffRole) {
+      throw new Error("As a staff member of this event, you cannot register as an attendee.");
+    }
+
     const fee = Number(event.registration_fee);
     const isFree = fee === 0;
 
@@ -231,6 +242,17 @@ export class CheckoutService {
       if (confirmedCount >= event.capacity) {
         throw new Error("This event has reached its maximum participation capacity.");
       }
+    }
+
+    // Organizers and staff members cannot register as attendees in their own event
+    if (event.created_by === userId) {
+      throw new Error("As the organizer of this event, you cannot register as an attendee.");
+    }
+    const staffRole = await prisma.eventUserRole.findUnique({
+      where: { event_id_user_id: { event_id: eventId, user_id: userId } }
+    });
+    if (staffRole) {
+      throw new Error("As a staff member of this event, you cannot register as an attendee.");
     }
 
     if (event.registration_type !== 'individual' && event.min_team_size > 1) {

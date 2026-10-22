@@ -97,7 +97,7 @@ export const PushService = {
         body: payload.body || '',
         icon: payload.icon || '/icons/icon-192x192.png',
         badge: payload.badge || '/icons/badge-72x72.png',
-        url: payload.url || 'https://community-connect-frontend-5oe1-beta.vercel.app/notifications',
+        url: payload.url || `${(process.env.FRONTEND_URL || "http://localhost:3001").replace(/\/$/, "")}/notifications`,
         tag: payload.tag || `cc-alert-${Date.now()}`,
         actions: payload.actions || [{ action: 'open', title: 'View' }],
         data: payload.data || {},
