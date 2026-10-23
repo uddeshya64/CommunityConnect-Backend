@@ -124,7 +124,13 @@ export const EventStaffController = {
       });
     } catch (error: any) {
       if (error instanceof ZodError) return res.status(400).json({ error: "Validation Error", details: error.issues });
-      res.status(400).json({ error: error.message });
+      const isAlreadyCheckedIn = Boolean(error.isAlreadyCheckedIn || error.message?.includes("already checked in"));
+      res.status(400).json({
+        error: error.message,
+        isAlreadyCheckedIn,
+        participantName: error.participantName,
+        checkedInAt: error.checkedInAt
+      });
     }
   },
 
