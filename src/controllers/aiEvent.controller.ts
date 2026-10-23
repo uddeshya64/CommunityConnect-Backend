@@ -16,6 +16,8 @@
 
 import { Request, Response } from "express";
 import { AiEventService } from "../services/aiEvent.service";
+import { AiAgendaService } from "../services/aiAgenda.service";
+import { AiQuizService } from "../services/aiQuiz.service";
 import { EventService } from "../services/event.service";
 import {
   AiChatSchema,
@@ -329,6 +331,66 @@ export const AiEventController = {
       });
     } catch (error: any) {
       res.status(500).json({ error: error?.message || "Failed to load schema" });
+    }
+  },
+
+  /**
+   * POST /api/ai-events/agenda/generate
+   * Generates event agenda timeline sessions using Gemini AI or local fallback
+   */
+  async generateAgenda(req: Request, res: Response) {
+    try {
+      const { eventId, prompt, history, timeZoneOffsetMinutes } = req.body;
+      if (!eventId) {
+        return res.status(400).json({ error: "eventId is required" });
+      }
+      if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+        return res.status(400).json({ error: "prompt is required" });
+      }
+
+      const result = await AiAgendaService.generate({
+        eventId: Number(eventId),
+        prompt: prompt.trim(),
+        history,
+        timeZoneOffsetMinutes: typeof timeZoneOffsetMinutes === "number" ? timeZoneOffsetMinutes : undefined,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || "Failed to generate agenda" });
+    }
+  },
+
+  /**
+   * POST /api/ai-events/quiz/generate
+   * Generates interactive event quiz & activity using Gemini AI or local fallback
+   */
+  async generateQuiz(req: Request, res: Response) {
+    try {
+      const { eventId, prompt, currentQuiz, history } = req.body;
+      if (!eventId) {
+        return res.status(400).json({ error: "eventId is required" });
+      }
+      if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+        return res.status(400).json({ error: "prompt is required" });
+      }
+
+      const result = await AiQuizService.generate({
+        eventId: Number(eventId),
+        prompt: prompt.trim(),
+        currentQuiz,
+        history,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || "Failed to generate quiz" });
     }
   },
 };

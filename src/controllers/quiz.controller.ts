@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 export const createQuiz = async (req: Request, res: Response): Promise<void> => {
   try {
     const eventId = Array.isArray(req.params.eventId) ? req.params.eventId[0] : req.params.eventId;
-    const { title, description } = req.body;
+    const { title, description, questions } = req.body;
 
     if (!title) {
       res.status(400).json({ success: false, message: "Quiz title is required" });
@@ -19,8 +19,31 @@ export const createQuiz = async (req: Request, res: Response): Promise<void> => 
         event_id: parseInt(eventId),
         title,
         description,
-        status: "DRAFT"
-      }
+        status: "DRAFT",
+        ...(Array.isArray(questions) && questions.length > 0
+          ? {
+              questions: {
+                create: questions.map((q: any, idx: number) => ({
+                  text: String(q.text || ""),
+                  time_limit: Number(q.time_limit) || 30,
+                  points: Number(q.points) || 1000,
+                  order: typeof q.order === "number" ? q.order : idx,
+                  options: {
+                    create: (q.options || []).map((opt: any) => ({
+                      text: String(opt.text || ""),
+                      is_correct: Boolean(opt.is_correct),
+                    })),
+                  },
+                })),
+              },
+            }
+          : {}),
+      },
+      include: {
+        questions: {
+          include: { options: true },
+        },
+      },
     });
 
     res.status(201).json({ success: true, quiz });
