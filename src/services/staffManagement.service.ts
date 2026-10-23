@@ -241,9 +241,14 @@ export class EventStaffService {
     }
     if (registration.checked_in) {
       const timeString = registration.checked_in_at
-        ? new Date(registration.checked_in_at).toLocaleTimeString()
-        : 'unknown';
-      throw new Error(`Participant has already checked in at ${timeString}.`);
+        ? new Date(registration.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+        : 'earlier';
+      const attendeeName = registration.user?.name || "Participant";
+      const err: any = new Error(`${attendeeName} has already checked in at ${timeString}.`);
+      err.isAlreadyCheckedIn = true;
+      err.participantName = attendeeName;
+      err.checkedInAt = timeString;
+      throw err;
     }
 
     return prisma.registration.update({

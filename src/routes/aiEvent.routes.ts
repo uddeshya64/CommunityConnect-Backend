@@ -18,6 +18,12 @@ const router = Router();
 // Conversation: transcript -> extracted event fields + clarification questions
 router.post("/chat", authenticate, AiEventController.chat);
 
+// AI Agenda session generator: voice/prompt -> structured event timeline sessions
+router.post("/agenda/generate", authenticate, AiEventController.generateAgenda);
+
+// AI Quiz & Activity generator: voice/prompt -> interactive questions, options & answers
+router.post("/quiz/generate", authenticate, AiEventController.generateQuiz);
+
 // Canonical field metadata (drives the review form) + allowed event types
 router.get("/schema", authenticate, AiEventController.schema);
 
