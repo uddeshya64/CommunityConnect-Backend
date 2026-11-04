@@ -1,5 +1,5 @@
 /**
- * CSV serialisation for Community Connect events.
+ * CSV serialisation for Eventrix events.
  *
  * The CSV produced here is a faithful, round-trippable projection of the
  * existing event schema (`prisma/schema.prisma` -> `model Event`, table
@@ -112,7 +112,7 @@ const COLUMN_ALIASES: Record<string, EventCsvColumn> = {
   seats: "capacity",
 };
 
-/** Header spellings exported by spreadsheets and the Community Connect UI. */
+/** Header spellings exported by spreadsheets and the Eventrix UI. */
 const ALIAS_LOOKUP = new Map<string, EventCsvColumn>(
   Object.entries(COLUMN_ALIASES).map(([alias, column]) => [
     normaliseHeader(alias),
@@ -353,7 +353,7 @@ export function parseEventCsv(input: string): ParsedEventCsv {
         {
           row: 1,
           message:
-            'CSV header must contain a "title" column matching the Community Connect event schema',
+            'CSV header must contain a "title" column matching the Eventrix event schema',
         },
       ],
     };

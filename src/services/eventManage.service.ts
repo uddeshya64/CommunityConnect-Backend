@@ -14,7 +14,7 @@ export class EventManageService {
     if (!event) throw new Error("Event not found");
 
     // 2. Run aggregations in parallel for better performance
-    const [totalRegistrations, totalTeams, revenueData] = await Promise.all([
+    const [totalRegistrations, totalTeams, revenueData, checkedInCount, pendingTasksCount] = await Promise.all([
       // Count confirmed registrations
       prisma.registration.count({
         where: { 
@@ -23,11 +23,11 @@ export class EventManageService {
         }
       }),
 
-      // Count created teams (excluding drafts if you want)
+      // Count created teams (excluding drafts)
       prisma.team.count({
         where: { 
           event_id: eventId,
-          status: { not: 'draft' } // Optional: only count active/locked teams
+          status: { not: 'draft' }
         }
       }),
 
@@ -38,7 +38,25 @@ export class EventManageService {
           status: 'success',
           registration: { event_id: eventId }
         }
-      })
+      }),
+
+      // Count checked in attendees
+      prisma.registration.count({
+        where: {
+          event_id: eventId,
+          checked_in: true
+        }
+      }),
+
+      // Count pending tasks
+      (prisma as any).eventStaffTask
+        ? (prisma as any).eventStaffTask.count({
+            where: {
+              event_id: eventId,
+              status: 'pending'
+            }
+          }).catch(() => 0)
+        : 0
     ]);
 
     // Prisma returns Decimal, so we convert it to a standard Number
@@ -51,6 +69,10 @@ export class EventManageService {
       total_registrations: totalRegistrations,
       teams_count: totalTeams,
       revenue: totalRevenue,
+      checked_in_count: checkedInCount,
+      checkedInCount,
+      pending_tasks_count: pendingTasksCount,
+      pendingTasksCount,
       eventTitle: event.title
     };
   }

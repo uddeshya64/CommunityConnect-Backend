@@ -316,7 +316,7 @@ export class AiAgendaService {
       const eventDateYMD = localStartDate.toISOString().split("T")[0];
 
       const systemInstruction = [
-        `You are the Community Connect AI Agenda and Session Architect for:`,
+        `You are the Eventrix AI Agenda and Session Architect for:`,
         `Event Title: "${event.title}"`,
         `Event Category: ${event.type?.name || "General Event"}`,
         `Event Mode: ${event.mode}`,

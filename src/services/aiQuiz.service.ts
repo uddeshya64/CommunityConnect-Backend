@@ -324,7 +324,7 @@ export class AiQuizService {
       const thinkingConfig = buildThinkingConfig(gemini.model);
 
       const systemInstruction = [
-        `You are the Community Connect AI Live Quiz & Gamification Creator.`,
+        `You are the Eventrix AI Live Quiz & Gamification Creator.`,
         `The event details are:`,
         `- Event Title: "${event.title}"`,
         `- Event Category: ${event.type?.name || "General"}`,
