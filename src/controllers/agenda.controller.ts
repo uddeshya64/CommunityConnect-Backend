@@ -1,4 +1,4 @@
-﻿import { Request, Response } from 'express';
+import { Request, Response } from 'express';
 import { RecommendationService } from '../services/recommendation.service';
 import { CalendarSyncService } from '../services/calendarSync.service';
 import { AgendaStatus, PrismaClient } from '@prisma/client';
@@ -16,7 +16,8 @@ export const AgendaController = {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const agendas = await RecommendationService.getUserAgenda(userId);
+      const eventId = req.query.eventId ? Number(req.query.eventId) : undefined;
+      const agendas = await RecommendationService.getUserAgenda(userId, eventId);
 
       // Enhance with Google Calendar quick links
       const enhancedAgendas = agendas.map((agenda: any) => ({
@@ -89,6 +90,35 @@ export const AgendaController = {
   /**
    * PATCH /api/agenda/:agendaId/status - Accept or Decline an agenda recommendation
    */
+  
+  /**
+   * POST /api/agenda/save/:eventId - Atomically batch save user's personalized agenda choices
+   */
+  async saveEventAgenda(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user?.id;
+      const eventId = Number(req.params.eventId);
+      const { choices } = req.body;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      if (isNaN(eventId)) {
+        return res.status(400).json({ error: 'Invalid event ID' });
+      }
+
+      const saved = await RecommendationService.saveEventAgenda(userId, eventId, choices);
+
+      res.json({
+        success: true,
+        message: 'Personal agenda updated successfully',
+        data: saved
+      });
+    } catch (error: any) {
+      console.error('[AGENDA_SAVE_ERROR]', error);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
+    }
+  },
   async updateStatus(req: Request, res: Response) {
     try {
       const userId = (req as any).user?.id;
@@ -127,7 +157,7 @@ export const AgendaController = {
       const icsContent = await CalendarSyncService.generateICSFeed(userId);
 
       res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="communityconnect-agenda.ics"');
+      res.setHeader('Content-Disposition', 'attachment; filename="eventrix-agenda.ics"');
       res.send(icsContent);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

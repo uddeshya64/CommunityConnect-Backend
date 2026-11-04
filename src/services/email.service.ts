@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 
 const EMAIL_USER = process.env.EMAIL_USER || "click.bait.ud.64@gmail.com";
 const EMAIL_PASS = process.env.EMAIL_PASS || "hmyo kpoz immi dbvl";
-const SENDER_NAME = process.env.BREVO_SENDER_NAME || "CommunityConnect";
+const SENDER_NAME = process.env.BREVO_SENDER_NAME || "Eventrix";
 const BREVO_SENDER_NAME = SENDER_NAME;
 const BASE_FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3001";
 const FRONTEND_URL = BASE_FRONTEND_URL.replace(/\/$/, "");
@@ -150,7 +150,7 @@ export class EmailService {
               <hr />
               
               <p style="font-size: 12px; color: #a1a1aa;">
-                © ${new Date().getFullYear()} CommunityConnect
+                © ${new Date().getFullYear()} Eventrix
               </p>
             </div>
           </div>
@@ -207,7 +207,7 @@ export class EmailService {
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 25px 0;" />
               
               <p style="font-size: 12px; color: #a1a1aa; text-align: center;">
-                © ${new Date().getFullYear()} CommunityConnect. All rights reserved.
+                © ${new Date().getFullYear()} Eventrix. All rights reserved.
               </p>
             </div>
           </div>
@@ -331,7 +331,7 @@ Please keep this email and present your QR code ticket at the entrance.
 
 Thank you,
 
-CommunityConnect
+Eventrix
         `.trim(),
 
         // --------------------------------------------------
@@ -354,7 +354,7 @@ CommunityConnect
                       </td>
                       <td style="vertical-align: middle;">
                         <span style="font-size: 18px; font-weight: 800; color: #18181b; letter-spacing: -0.5px;">
-                          CommunityConnect
+                          Eventrix
                         </span>
                       </td>
                     </tr>
@@ -462,7 +462,7 @@ CommunityConnect
                     Need assistance? Contact the organizer team via the platform.
                   </p>
                   <p style="font-size: 12px; color: #d4d4d8; margin: 0;">
-                    &copy; ${new Date().getFullYear()} CommunityConnect. All rights reserved.
+                    &copy; ${new Date().getFullYear()} Eventrix. All rights reserved.
                   </p>
                 </div>
               </div>
@@ -589,7 +589,7 @@ CommunityConnect
 //   static async sendTeamInvite(email: string, teamName: string, magicLink: string) {
 //     try {
 //       await transporter.sendMail({
-//         from: '"CommunityConnect" <no-reply@communityconnect.com>',
+//         from: '"Eventrix" <no-reply@eventrix.com>',
 //         to: email,
 //         subject: `You have been invited to join ${teamName}!`,
 //         text: `Click this link to join the team: ${magicLink}`,
@@ -660,7 +660,7 @@ CommunityConnect
 //       const eventUrl = `${env.FRONTEND_URL}/events/${reg.event.id}`;
 
 //       await transporter.sendMail({
-//         from: '"CommunityConnect" <no-reply@communityconnect.com>',
+//         from: '"Eventrix" <no-reply@eventrix.com>',
 //         to: reg.user.email,
 //         subject: `Your Registration for ${reg.event.title} is Confirmed!`,
 //         text: `Hi ${reg.user.name}, you are registered for ${reg.event.title}. Your ticket code is ${ticketCode}. Go to ${eventUrl} for more details.`,
@@ -679,7 +679,7 @@ CommunityConnect
 //                         <div style="width: 24px; height: 24px; border-radius: 6px; background: linear-gradient(135deg, #4f46e5, #7c3aed);"></div>
 //                       </td>
 //                       <td style="vertical-align: middle;">
-//                         <span style="font-size: 18px; font-weight: 800; color: #18181b; letter-spacing: -0.5px;">CommunityConnect</span>
+//                         <span style="font-size: 18px; font-weight: 800; color: #18181b; letter-spacing: -0.5px;">Eventrix</span>
 //                       </td>
 //                     </tr>
 //                   </table>
@@ -760,7 +760,7 @@ CommunityConnect
 //                 <!-- Footer -->
 //                 <div style="text-align: center; border-top: 1px solid #e4e4e7; padding-top: 24px; font-family: sans-serif;">
 //                   <p style="font-size: 13px; color: #a1a1aa; margin: 0 0 6px 0;">Need assistance? Contact the organizer team via the platform.</p>
-//                   <p style="font-size: 12px; color: #d4d4d8; margin: 0;">&copy; ${new Date().getFullYear()} CommunityConnect. All rights reserved.</p>
+//                   <p style="font-size: 12px; color: #d4d4d8; margin: 0;">&copy; ${new Date().getFullYear()} Eventrix. All rights reserved.</p>
 //                 </div>
 //               </div>
 //             </div>

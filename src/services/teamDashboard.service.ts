@@ -43,6 +43,8 @@ export class TeamDashboardService {
             min_team_size: true,
             max_team_size: true,
             registration_type: true,
+            location: true,
+            mode: true,
             timelines: {
               orderBy: { start_time: 'asc' }
             }
@@ -68,7 +70,9 @@ export class TeamDashboardService {
               min_team_size: true,
               max_team_size: true,
               registration_type: true,
-              timelines: {
+            location: true,
+            mode: true,
+            timelines: {
                 orderBy: { start_time: 'asc' }
               }
             }

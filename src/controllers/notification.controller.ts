@@ -232,7 +232,7 @@ export const NotificationController = {
       const targetUrl = `${frontendUrl}/notifications`;
 
       const result = await PushService.sendPushToUser(userId, {
-        title: "CommunityConnect",
+        title: "Eventrix",
         body: `Hello ${user?.name || 'there'}! Native system notifications are working on this device.`,
         icon: "/icons/icon-192x192.png",
         badge: "/icons/badge-72x72.png",

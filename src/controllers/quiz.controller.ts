@@ -259,6 +259,86 @@ export const deleteQuiz = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
+// Update a quiz title or description
+export const updateQuiz = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const quizId = Array.isArray(req.params.quizId) ? req.params.quizId[0] : req.params.quizId;
+    const { title, description } = req.body;
+
+    const quiz = await prisma.quiz.update({
+      where: { id: parseInt(quizId) },
+      data: {
+        ...(title !== undefined ? { title: String(title).trim() } : {}),
+        ...(description !== undefined ? { description: String(description).trim() } : {})
+      },
+      include: {
+        questions: {
+          include: { options: true }
+        }
+      }
+    });
+
+    res.status(200).json({ success: true, quiz });
+  } catch (error: any) {
+    console.error("Update quiz error:", error);
+    res.status(500).json({ success: false, message: error.message || "Failed to update quiz" });
+  }
+};
+
+// Update a question and its options
+export const updateQuestion = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const questionId = Array.isArray(req.params.questionId) ? req.params.questionId[0] : req.params.questionId;
+    const qIdNum = parseInt(questionId);
+    const { text, time_limit, points, options } = req.body;
+
+    if (!text && !options) {
+      res.status(400).json({ success: false, message: "Nothing to update" });
+      return;
+    }
+
+    const updatedQuestion = await prisma.$transaction(async (tx) => {
+      // 1. Update question fields if provided
+      const updateData: any = {};
+      if (text !== undefined) updateData.text = String(text).trim();
+      if (time_limit !== undefined) updateData.time_limit = Number(time_limit);
+      if (points !== undefined) updateData.points = Number(points);
+
+      await tx.question.update({
+        where: { id: qIdNum },
+        data: updateData
+      });
+
+      // 2. Update options if provided
+      if (Array.isArray(options) && options.length > 0) {
+        // Delete old options
+        await tx.option.deleteMany({
+          where: { question_id: qIdNum }
+        });
+
+        // Insert new options
+        await tx.option.createMany({
+          data: options.map((opt: any) => ({
+            question_id: qIdNum,
+            text: String(opt.text || "").trim(),
+            is_correct: Boolean(opt.is_correct)
+          }))
+        });
+      }
+
+      return tx.question.findUnique({
+        where: { id: qIdNum },
+        include: { options: true }
+      });
+    });
+
+    res.status(200).json({ success: true, question: updatedQuestion });
+  } catch (error: any) {
+    console.error("Update question error:", error);
+    res.status(500).json({ success: false, message: error.message || "Failed to update question" });
+  }
+};
+
 // Delete a question
 export const deleteQuestion = async (req: Request, res: Response): Promise<void> => {
   try {

@@ -796,7 +796,7 @@ function buildDescription(text: string): string {
   return (
     cleaned
       ? `${cleaned}.`
-      : "Event created with the Community Connect AI event creator."
+      : "Event created with the Eventrix AI event creator."
   ).slice(0, 1000);
 }
 

@@ -10,6 +10,9 @@ router.get('/', authenticate, AgendaController.getUserAgenda);
 // Generate/Regenerate ML recommendations for a specific registered event
 router.post('/generate/:eventId', authenticate, AgendaController.generateAgenda);
 
+// Batch save personalized agenda for an event
+router.post('/save/:eventId', authenticate, AgendaController.saveEventAgenda);
+
 // Accept or Decline a session recommendation
 router.patch('/:agendaId/status', authenticate, AgendaController.updateStatus);
 
