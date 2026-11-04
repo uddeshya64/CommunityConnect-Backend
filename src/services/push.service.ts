@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 // Setup VAPID Keys
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || "BKL-vi_3IazNVKj_m2ZYkZ1PNAxsnWuRscC8LQixLE6dNYl7-pxo8N6lcbmr7MVLj9dDY7lS5UsVokG8JDk0faU";
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || "jZBpbmOzb4N4YCplub12pDoGraDKwIEasiOggXXFofk";
-const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:support@communityconnect.dev';
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:support@eventrix.dev';
 
 try {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
@@ -93,7 +93,7 @@ export const PushService = {
       }
 
       const stringifiedPayload = JSON.stringify({
-        title: payload.title || 'CommunityConnect Alert',
+        title: payload.title || 'Eventrix Alert',
         body: payload.body || '',
         icon: payload.icon || '/icons/icon-192x192.png',
         badge: payload.badge || '/icons/badge-72x72.png',

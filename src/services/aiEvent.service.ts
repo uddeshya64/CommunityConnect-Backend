@@ -102,7 +102,7 @@ function buildSystemInstruction(knownTypes: string[]): string {
     : "Technical Conferences, Hackathons and Competitions, Corporate Events, Exhibitions and Trade Shows, Academic and Training Events, Weddings and Personal Events, Community and Nonprofit Events, Sports and Recreational Events, Government and Civic Events, Hybrid and Virtual Events";
 
   return [
-    "You are the Community Connect AI Event Creation assistant.",
+    "You are the Eventrix AI Event Creation assistant.",
     "From the user's spoken or typed prompt, immediately extract and generate all necessary event details to create a complete, ready-to-publish event draft.",
     "Do NOT ask any clarification questions or ask the user for missing fields. Always fill in sensible, realistic defaults for any fields that the user did not explicitly specify.",
     "Allowed keys and meanings in the event object:",

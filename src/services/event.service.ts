@@ -236,7 +236,8 @@ export class EventService {
       include: {
         creator: { select: { id: true, name: true, avatar_url: true } },
         type: { select: { name: true } },
-        timelines: { select: { tags: true } }
+        timelines: { select: { tags: true } },
+        _count: { select: { registrations: true } }
       }
     });
 
@@ -262,7 +263,9 @@ export class EventService {
         ...rest,
         type: type.name,
         tags: aggregatedTags,
-        is_saved: savedEventIds.has(evt.id)
+        is_saved: savedEventIds.has(evt.id),
+        registered_count: (evt as any)._count?.registrations ?? 0,
+        _count: (evt as any)._count
       };
     });
 
@@ -527,7 +530,8 @@ export class EventService {
         event: {
           include: {
             creator: { select: { id: true, name: true, avatar_url: true } },
-            type: { select: { name: true } }
+            type: { select: { name: true } },
+            _count: { select: { registrations: true } }
           }
         }
       }
@@ -541,7 +545,9 @@ export class EventService {
         ...rest,
         type: type.name,
         is_saved: true,
-        saved_at: se.saved_at
+        saved_at: se.saved_at,
+        registered_count: (se.event as any)._count?.registrations ?? 0,
+        _count: (se.event as any)._count
       };
     });
 
@@ -560,7 +566,8 @@ export class EventService {
             include: {
               creator: { select: { id: true, name: true, avatar_url: true } },
               type: { select: { name: true } },
-              timelines: { select: { tags: true } }
+              timelines: { select: { tags: true } },
+              _count: { select: { registrations: true } }
             }
           },
           role: { select: { id: true, name: true } }
@@ -581,7 +588,9 @@ export class EventService {
             tags: aggregatedTags,
             staffRoleName: sr.role ? sr.role.name : 'Staff Member',
             staffRoleId: sr.role_id,
-            assignedAt: sr.assigned_at
+            assignedAt: sr.assigned_at,
+            registered_count: (sr.event as any)._count?.registrations ?? 0,
+            _count: (sr.event as any)._count
           };
         });
 

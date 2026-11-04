@@ -288,15 +288,20 @@ export class RecommendationService {
   }
 
   /**
-   * Retrieve User Personal Agenda across all registered events
+   * Retrieve User Personal Agenda across all registered events (optionally filtered by eventId)
    */
-  static async getUserAgenda(userId: number) {
+  static async getUserAgenda(userId: number, eventId?: number) {
     const db = getPrisma();
     let agendas: any[] = [];
 
+    const whereClause: any = { user_id: userId };
+    if (eventId) {
+      whereClause.event_id = eventId;
+    }
+
     if ((db as any).userAgenda) {
       agendas = await (db as any).userAgenda.findMany({
-        where: { user_id: userId },
+        where: whereClause,
         include: {
           timeline: true,
           event: {
@@ -317,20 +322,102 @@ export class RecommendationService {
         }
       });
     } else {
-      agendas = await db.$queryRawUnsafe(
-        `SELECT ua.*, 
+      let query = `SELECT ua.*, 
                 json_build_object('id', et.id, 'title', et.title, 'description', et.description, 'speaker_name', et.speaker_name, 'start_time', et.start_time, 'end_time', et.end_time, 'location', et.location, 'tags', et.tags) as timeline,
                 json_build_object('id', e.id, 'title', e.title, 'start_date', e.start_date, 'end_date', e.end_date, 'location', e.location, 'banner_url', e.banner_url) as event
          FROM user_agendas ua
          JOIN event_timelines et ON ua.timeline_id = et.id
          JOIN events e ON ua.event_id = e.id
-         WHERE ua.user_id = $1
-         ORDER BY et.start_time ASC;`,
-        userId
-      );
+         WHERE ua.user_id = $1`;
+      const params = [userId];
+      if (eventId) {
+        query += ` AND ua.event_id = $2`;
+        params.push(eventId);
+      }
+      query += ` ORDER BY et.start_time ASC;`;
+      agendas = await db.$queryRawUnsafe(query, ...params);
     }
 
     return agendas;
+  }
+
+  /**
+   * Batch save / update personalized agenda preferences for an event
+   */
+  static async saveEventAgenda(userId: number, eventId: number, rawChoices: any) {
+    const db = getPrisma();
+
+    const event = await db.event.findUnique({
+      where: { id: eventId },
+      include: {
+        timelines: {
+          orderBy: { start_time: 'asc' }
+        }
+      }
+    });
+
+    if (!event) {
+      throw new Error(`Event with ID ${eventId} not found`);
+    }
+
+    const choicesList: Array<{ id: number; status: 'ACCEPTED' | 'DECLINED' }> = [];
+    if (Array.isArray(rawChoices)) {
+      rawChoices.forEach(c => {
+        const idNum = Number(c.timelineId || c.timeline_id || c.agendaId || c.id);
+        const status = c.status === 'ACCEPTED' ? 'ACCEPTED' : 'DECLINED';
+        if (!isNaN(idNum)) choicesList.push({ id: idNum, status });
+      });
+    } else if (typeof rawChoices === 'object' && rawChoices !== null) {
+      Object.entries(rawChoices).forEach(([k, v]) => {
+        const idNum = Number(k);
+        const status = v === 'ACCEPTED' ? 'ACCEPTED' : 'DECLINED';
+        if (!isNaN(idNum)) choicesList.push({ id: idNum, status });
+      });
+    }
+
+    for (const choice of choicesList) {
+      let timelineId: number | undefined;
+
+      const directTimeline = event.timelines.find(t => t.id === choice.id);
+      if (directTimeline) {
+        timelineId = directTimeline.id;
+      } else {
+        const userAgendaRecord = await (db as any).userAgenda.findUnique({
+          where: { id: choice.id },
+          select: { timeline_id: true }
+        });
+        if (userAgendaRecord) {
+          timelineId = userAgendaRecord.timeline_id;
+        }
+      }
+
+      if (!timelineId) continue;
+
+      const targetStatus = choice.status === 'ACCEPTED'
+        ? (AgendaStatus.ACCEPTED || 'ACCEPTED')
+        : (AgendaStatus.DECLINED || 'DECLINED');
+
+      await (db as any).userAgenda.upsert({
+        where: {
+          user_id_timeline_id: {
+            user_id: userId,
+            timeline_id: timelineId
+          }
+        },
+        create: {
+          user_id: userId,
+          event_id: eventId,
+          timeline_id: timelineId,
+          status: targetStatus,
+          match_score: 0.9
+        },
+        update: {
+          status: targetStatus
+        }
+      });
+    }
+
+    return this.getUserAgenda(userId, eventId);
   }
 
   /**

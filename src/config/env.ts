@@ -24,7 +24,7 @@ const envSchema = z.object({
   BREVO_SMTP_USER: z.string().email(),
   BREVO_SMTP_KEY: z.string().min(1),
   BREVO_SENDER_EMAIL: z.string().email(),
-  BREVO_SENDER_NAME: z.string().default("CommunityConnect"),
+  BREVO_SENDER_NAME: z.string().default("Eventrix"),
 
   FRONTEND_URL: z.string().url().default("http://localhost:3001"),
   ALLOWED_ORIGINS: z.string().optional(),

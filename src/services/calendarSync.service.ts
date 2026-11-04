@@ -1,4 +1,4 @@
-﻿import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 
 const prisma = new PrismaClient();
@@ -157,10 +157,10 @@ export class CalendarSyncService {
     const lines: string[] = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//CommunityConnect//Personal Agenda//EN',
+      'PRODID:-//Eventrix//Personal Agenda//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      'X-WR-CALNAME:CommunityConnect Personal Agenda'
+      'X-WR-CALNAME:Eventrix Personal Agenda'
     ];
 
     for (const agenda of agendas) {
@@ -181,7 +181,7 @@ export class CalendarSyncService {
 
       lines.push(
         'BEGIN:VEVENT',
-        `UID:agenda-${agenda.id}-${timeline.id}@communityconnect.app`,
+        `UID:agenda-${agenda.id}-${timeline.id}@eventrix.app`,
         `DTSTAMP:${formatICalDate(new Date())}`,
         `DTSTART:${startTime}`,
         `DTEND:${endTime}`,
@@ -206,7 +206,7 @@ export class CalendarSyncService {
       ? formatICalDate(new Date(endTime))
       : formatICalDate(new Date(new Date(startTime).getTime() + 3600000));
 
-    const details = encodeURIComponent(`${description}\n\nOrganized by CommunityConnect (${eventTitle})`);
+    const details = encodeURIComponent(`${description}\n\nOrganized by Eventrix (${eventTitle})`);
     const title = encodeURIComponent(`${sessionTitle} - ${eventTitle}`);
     const loc = encodeURIComponent(location || 'Online Session');
 

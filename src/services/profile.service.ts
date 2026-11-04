@@ -45,10 +45,93 @@ export class ProfileService {
             end_date: true,
             location: true,
             banner_url: true,
+            capacity: true,
+            type: { select: { name: true } },
+            _count: { select: { registrations: true } },
           },
-
           orderBy: {
             start_date: "asc",
+          },
+        },
+
+        // ==========================================
+        // USER REGISTRATIONS
+        // ==========================================
+        registrations: {
+          select: {
+            id: true,
+            status: true,
+            created_at: true,
+            team_id: true,
+            event: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                start_date: true,
+                end_date: true,
+                location: true,
+                banner_url: true,
+                capacity: true,
+                type: { select: { name: true } },
+                _count: { select: { registrations: true } },
+              },
+            },
+            team: {
+              select: {
+                id: true,
+                name: true,
+                members: {
+                  select: {
+                    user_id: true,
+                    user: {
+                      select: {
+                        id: true,
+                        name: true,
+                        avatar_url: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            created_at: "desc",
+          },
+        },
+
+        // ==========================================
+        // TEAM MEMBERSHIPS
+        // ==========================================
+        team_memberships: {
+          select: {
+            team: {
+              select: {
+                id: true,
+                name: true,
+                event_id: true,
+                event: {
+                  select: {
+                    id: true,
+                    title: true,
+                    start_date: true,
+                  },
+                },
+                members: {
+                  select: {
+                    user_id: true,
+                    user: {
+                      select: {
+                        id: true,
+                        name: true,
+                        avatar_url: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
 
@@ -57,17 +140,13 @@ export class ProfileService {
         // ==========================================
         _count: {
           select: {
-            // Total events created
             events_created: true,
-
-            // Total teams led
             teams_led: true,
-
-            // Total mentor assignments
             mentor_assignments: true,
-
-            // Total submissions
             submissions: true,
+            registrations: true,
+            team_memberships: true,
+            saved_events: true,
           },
         },
       },
@@ -101,7 +180,7 @@ export class ProfileService {
       }
 
       if (visibility === "community" && !viewerId) {
-        throw new Error("This profile is visible to logged-in CommunityConnect members only.");
+        throw new Error("This profile is visible to logged-in Eventrix members only.");
       }
 
       // 2. Field-level privacy masking
