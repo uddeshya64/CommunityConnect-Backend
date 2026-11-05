@@ -8,6 +8,8 @@ router.use(authenticate);
 
 // In-app Notification list
 router.get('/', NotificationController.getNotifications);
+router.get('/unread-count', NotificationController.getUnreadCount);
+router.post('/mark-all-read', NotificationController.markAllRead);
 
 // System Push Notification Routes
 router.get('/push/status', NotificationController.getPushStatus);
