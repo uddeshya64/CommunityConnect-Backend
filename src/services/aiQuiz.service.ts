@@ -331,7 +331,7 @@ export class AiQuizService {
         `- Event Description: ${event.description || "N/A"}`,
         `- Event Mode: ${event.mode}`,
         ``,
-        `YOUR MISSION: Generate an engaging, interactive multiple-choice quiz activity for event attendees (Kahoot-style live gamification) based on the user's prompt or voice transcript.`,
+        `YOUR MISSION: Generate an engaging, interactive multiple-choice quiz activity for event attendees (live interactive gamification) based on the user's prompt or voice transcript.`,
         ``,
         `CRITICAL RULES & FORMATTING:`,
         `1. QUIZ TITLE & DESCRIPTION:`,

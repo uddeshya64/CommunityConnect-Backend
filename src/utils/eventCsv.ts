@@ -153,8 +153,8 @@ export function escapeCsvValue(value: unknown): string {
     typeof value === "string"
       ? value
       : typeof value === "object"
-      ? JSON.stringify(value)
-      : String(value);
+        ? JSON.stringify(value)
+        : String(value);
 
   const needsQuoting =
     text.includes(",") ||
