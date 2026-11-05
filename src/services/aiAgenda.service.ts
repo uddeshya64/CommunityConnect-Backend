@@ -29,10 +29,7 @@ function getGeminiConfig(): { apiKey: string; model: string } | null {
   const apiKey = env?.GEMINI_API_KEY?.trim();
   if (!apiKey) return null;
 
-  let model = env?.GEMINI_MODEL?.trim() || "gemini-1.5-flash";
-  if (/gemini-3\.5/i.test(model) || !model.startsWith("gemini")) {
-    model = "gemini-1.5-flash";
-  }
+  const model = env?.GEMINI_MODEL?.trim() || "gemini-3-flash-preview";
 
   return {
     apiKey,
@@ -59,18 +56,18 @@ function parseToLocalDatetimeString(
   const str = String(val).trim();
   if (!str || str === "null" || str === "undefined") return fallback;
 
-  // If format already has date and time (e.g. 2026-10-23T18:00 or 2026-10-23 18:00)
+  // Format with date and time: YYYY-MM-DD[T/ ]HH:mm
   const dtMatch = str.match(/(\d{4}-\d{2}-\d{2})[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (dtMatch) {
     return `${dtMatch[1]}T${pad(dtMatch[2])}:${pad(dtMatch[3])}:00`;
   }
 
-  // If format only has time (e.g. "18:00", "6:00 PM", "6 PM", "10:30 AM")
-  const timeOnly = str.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  // Format with time only: 24-hr (e.g. "19:00", "19:30:00") or 12-hr ("7:00 PM", "7 PM")
+  const timeOnly = str.match(/(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(am|pm)?/i);
   if (timeOnly) {
     let h = parseInt(timeOnly[1], 10);
     const m = timeOnly[2] ? parseInt(timeOnly[2], 10) : 0;
-    const meridiem = (timeOnly[3] || "").toLowerCase();
+    const meridiem = (timeOnly[4] || "").toLowerCase();
     if (meridiem === "pm" && h < 12) h += 12;
     if (meridiem === "am" && h === 12) h = 0;
     return `${fallbackDateYMD}T${pad(h)}:${pad(m)}:00`;
@@ -95,7 +92,7 @@ const AGENDA_JSON_SCHEMA = {
           title: {
             type: "STRING",
             description:
-              "Creative, catchy 2 to 7 words session title. For celebrations or parties include fitting emojis (e.g. '🎉 Welcome Gala Kickoff', '🏆 Grand Awards Ceremony', '🍕 Networking Pizza Mixer'). For tech/business keep it punchy (e.g. '⚡ Cloud Architecture Masterclass', '🎙️ Keynote: Future of AI').",
+              "Creative, catchy 2 to 7 words session title representing the actual event activity. NEVER include conversational words like 'can you create' or 'I can you create'. For celebrations or parties include fitting emojis (e.g. '🪔 Diwali Team Dinner & Celebration', '🎉 Welcome Gala Kickoff', '🏆 Grand Awards Ceremony', '🍕 Networking Pizza Mixer'). For tech/business keep it punchy (e.g. '⚡ Cloud Architecture Masterclass', '🎙️ Keynote: Future of AI').",
           },
           speaker_name: {
             type: "STRING",
@@ -110,22 +107,22 @@ const AGENDA_JSON_SCHEMA = {
           tags: {
             type: "ARRAY",
             items: { type: "STRING" },
-            description: "2 to 4 relevant keyword tags (e.g. ['Keynote', 'AI'] or ['Celebration', 'Music']).",
+            description: "2 to 4 relevant keyword tags (e.g. ['Celebration', 'Diwali', 'Dinner'] or ['Keynote', 'AI']).",
           },
           start_time: {
             type: "STRING",
             description:
-              "Start time formatted as 'YYYY-MM-DDTHH:mm:ss' on the event date (e.g. '2026-10-23T10:00:00'). If no specific time was mentioned, assign a sensible time on the event date.",
+              "Start time formatted as 'YYYY-MM-DDTHH:mm:ss' on the event date (e.g. '2026-11-06T19:00:00' for evening dinner). If no specific time was mentioned, assign a realistic time (dinner/evening at 19:00, lunch at 12:30, daytime at 10:00).",
           },
           end_time: {
             type: "STRING",
             description:
-              "End time formatted as 'YYYY-MM-DDTHH:mm:ss' on the event date (e.g. '2026-10-23T11:00:00'). Must be after start_time.",
+              "End time formatted as 'YYYY-MM-DDTHH:mm:ss' on the event date (e.g. '2026-11-06T21:00:00'). Must be after start_time.",
           },
           location: {
             type: "STRING",
             description:
-              "Room, hall, stage, or virtual link (e.g. 'Auditorium A', 'Room 204', 'Virtual Stage'). If none, return empty string.",
+              "Room, hall, stage, or virtual link (e.g. 'Main Banquet Hall', 'Auditorium A', 'Room 204', 'Virtual Stage'). If none, return empty string.",
           },
         },
         required: ["title", "start_time", "end_time", "description"],
@@ -135,58 +132,87 @@ const AGENDA_JSON_SCHEMA = {
   required: ["reply", "sessions"],
 };
 
+function cleanConversationalPreamble(text: string): string {
+  return text
+    .replace(/^(?:i\s+)?(?:can\s+you|please|could\s+you|would\s+you|help\s+me|want\s+to|need\s+to)\s+(?:create|make|build|generate|structure|design|plan|add|schedule|set\s+up|draft)\s+(?:an?\s+)?(?:agenda|schedule|plan|timeline|session|activities|program)?\s*(?:for|about|with|of)?\s*/i, "")
+    .replace(/^(?:create|make|build|generate|structure|design|plan|add|schedule|set\s+up|draft)\s+(?:an?\s+)?(?:agenda|schedule|plan|timeline|session|activities|program)?\s*(?:for|about|with|of)?\s*/i, "")
+    .replace(/^(?:an?\s+)?(?:agenda|schedule|plan|timeline)\s+(?:for|about|with|of)?\s*/i, "")
+    .trim();
+}
+
 function parseSingleSessionText(
-  text: string,
+  rawText: string,
   event: any,
   eventDateYMD: string,
   defaultStartHour: number = 10,
   durationMinutes: number = 60
 ): GeneratedAgendaSession {
-  const combinedText = `${text} ${event.title || ""} ${event.type?.name || ""}`.toLowerCase();
-  const isCelebration = /(celebrat|party|gala|award|anniversary|birthday|fest|cultural|dance|music|dj|cocktail|dinner|lunch|food|pizza|game|fun|cheer|reception)/i.test(combinedText);
+  const text = cleanConversationalPreamble(rawText);
+  const combinedText = `${rawText} ${event.title || ""} ${event.type?.name || ""}`.toLowerCase();
+  const isCelebration = /(celebrat|party|gala|award|anniversary|birthday|fest|cultural|dance|music|dj|cocktail|dinner|lunch|food|pizza|game|fun|cheer|reception|diwali)/i.test(combinedText);
   const isTechOrWork = /(ai|cloud|code|developer|hackathon|workshop|keynote|panel|summit|conference|webinar|design|product|lab)/i.test(combinedText);
+
+  // Time context sensing (dinner = 19:00, lunch = 13:00, morning = 09:00)
+  let sensedStartHour = defaultStartHour;
+  let sensedDuration = durationMinutes;
+  if (combinedText.includes("dinner") || combinedText.includes("evening") || combinedText.includes("cocktail") || combinedText.includes("night party")) {
+    sensedStartHour = 19;
+    sensedDuration = 120;
+  } else if (combinedText.includes("lunch")) {
+    sensedStartHour = 13;
+    sensedDuration = 60;
+  } else if (combinedText.includes("breakfast") || combinedText.includes("morning setup")) {
+    sensedStartHour = 9;
+    sensedDuration = 60;
+  } else if (combinedText.includes("afternoon") || combinedText.includes("workshop") || combinedText.includes("lab")) {
+    sensedStartHour = 14;
+    sensedDuration = 90;
+  }
 
   // Speaker extraction
   let speakerName: string | null = null;
-  const speakerMatch = text.match(/(?:by|hosted\s+by|speaker(?:\s*is|:)?)\s+([A-Za-z0-9\s.]{1,35}?)(?=[,\n]|(?:\s+(?:from|at|in)\b)|$)/i);
+  const speakerMatch = rawText.match(/(?:by|hosted\s+by|speaker(?:\s*is|:)?)\s+([A-Za-z0-9\s.]{1,35}?)(?=[,\n]|(?:\s+(?:from|at|in)\b)|$)/i);
   if (speakerMatch) {
     speakerName = speakerMatch[1].trim().replace(/\.+$/, "");
   }
 
   // Location extraction
   let location: string | null = null;
-  const locationMatch = text.match(/(?:in|at)\s+([a-zA-Z0-9\s-]{2,25}?(?:hall|room|stage|auditorium|ballroom|rooftop|center|centre|lab|campus|virtual|online|zoom|meet)[a-zA-Z0-9\s-]*)/i)
-    || text.match(/(?:in|at)\s+(hall\s+[a-z0-9]+|room\s+[0-9]+|stage\s+[0-9]+|auditorium\s+[a-z0-9]+|lab\s+[a-z0-9]+|ballroom|rooftop|online|virtual)/i);
+  const locationMatch = rawText.match(/(?:in|at)\s+([a-zA-Z0-9\s-]{2,25}?(?:hall|room|stage|auditorium|ballroom|rooftop|center|centre|lab|campus|virtual|online|zoom|meet|dining|banquet)[a-zA-Z0-9\s-]*)/i)
+    || rawText.match(/(?:in|at)\s+(hall\s+[a-z0-9]+|room\s+[0-9]+|stage\s+[0-9]+|auditorium\s+[a-z0-9]+|lab\s+[a-z0-9]+|ballroom|rooftop|online|virtual)/i);
   if (locationMatch) {
     location = locationMatch[0].replace(/^(?:in|at)\s+/i, "").trim();
   }
 
   // Tags
   const tags: string[] = [];
+  if (combinedText.includes("diwali")) tags.push("Diwali", "Festive");
+  if (combinedText.includes("dinner") || combinedText.includes("food")) tags.push("Dining", "Team Dinner");
   if (isCelebration) {
-    if (/award/i.test(combinedText)) tags.push("Awards", "Recognition");
-    else if (/dj|music|dance/i.test(combinedText)) tags.push("Music", "Entertainment");
-    else if (/dinner|food|lunch|pizza|cocktail/i.test(combinedText)) tags.push("Dining", "Networking");
-    else tags.push("Celebration", "Fun");
+    if (!tags.includes("Festive")) tags.push("Celebration");
+    if (/award/i.test(combinedText)) tags.push("Awards");
+    if (/dj|music|dance/i.test(combinedText)) tags.push("Entertainment");
+    tags.push("Networking");
   } else if (isTechOrWork) {
-    if (/keynote/i.test(combinedText)) tags.push("Keynote", "Leadership");
-    else if (/workshop|lab/i.test(combinedText)) tags.push("Workshop", "Hands-on");
-    else if (/hackathon/i.test(combinedText)) tags.push("Hackathon", "Build");
-    else tags.push("Tech", "Innovation");
+    if (/keynote/i.test(combinedText)) tags.push("Keynote");
+    if (/workshop|lab/i.test(combinedText)) tags.push("Workshop");
+    if (/hackathon/i.test(combinedText)) tags.push("Hackathon");
+    tags.push("Tech");
   }
+  const cleanTags = Array.from(new Set(tags)).slice(0, 4);
 
   // Time extraction
   const rangeRegex = /(?:from\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
-  const rangeMatch = text.match(rangeRegex);
+  const rangeMatch = rawText.match(rangeRegex);
 
   const singleRegex = /(?:at|from|starts?\s+at)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
-  const singleMatch = text.match(singleRegex);
+  const singleMatch = rawText.match(singleRegex);
 
   const pad = (n: number) => String(n).padStart(2, "0");
-  let startH = defaultStartHour;
+  let startH = sensedStartHour;
   let startM = 0;
-  let endH = defaultStartHour + Math.floor(durationMinutes / 60);
-  let endM = durationMinutes % 60;
+  let endH = sensedStartHour + Math.floor(sensedDuration / 60);
+  let endM = sensedDuration % 60;
 
   if (rangeMatch) {
     startH = parseInt(rangeMatch[1], 10);
@@ -218,43 +244,46 @@ function parseSingleSessionText(
   const startTimeStr = `${eventDateYMD}T${pad(startH)}:${pad(startM)}:00`;
   const endTimeStr = `${eventDateYMD}T${pad(endH)}:${pad(endM)}:00`;
 
-  // Clean title
-  let clean = text
+  // Clean title: isolate the core topic/activity
+  let titleClause = text
+    .split(/\b(?:in\s+which|where\s+we|and\s+going\s+to|so\s+that|in\s+order\s+to|which\s+will|talk\s+about)\b/i)[0]
     .replace(/(?:from\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:to|-)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?/gi, "")
     .replace(/(?:at|from|starts?\s+at)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?/gi, "")
     .replace(/(?:by|hosted\s+by)\s+[A-Za-z0-9.]*(?:\s+[A-Za-z0-9.]*){0,3}/gi, "")
     .replace(/(?:in|at)\s+(?:hall\s+[a-z0-9]+|room\s+[0-9]+|stage\s+[0-9]+|auditorium\s+[a-z0-9]+|lab\s+[a-z0-9]+|ballroom|rooftop|online|virtual)/gi, "")
-    .replace(/^(?:create|add|schedule|plan|organize)\s+(?:a|an)?\s*/i, "")
     .replace(/^\d+[\s.)-]+\s*/, "")
     .trim();
 
-  const words = clean.split(/\s+/).filter(Boolean);
-  let title = "";
-  if (words.length > 8) {
-    title = words.slice(0, 7).join(" ");
-  } else if (words.length >= 1) {
-    title = words.join(" ");
+  let words = titleClause.split(/\s+/).filter(Boolean);
+  if (words.length > 7) words = words.slice(0, 6);
+  let title = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+
+  // If Diwali or Festive is in prompt/event and not yet in title
+  if (combinedText.includes("diwali") && !title.toLowerCase().includes("diwali")) {
+    title = title ? `${title} & Diwali Celebration` : "Diwali Team Celebration & Dinner";
   }
 
-  title = title.replace(/\s+(?:&|and|with|at|in|-|for|to)\s*$/i, "").trim();
-
+  // Prepend appropriate emoji
   const hasEmoji = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]/u.test(title);
   if (!hasEmoji) {
-    const emojis = isCelebration
-      ? ["🎉", "🥳", "✨", "🏆", "🥂", "🍕", "🎵", "🎈"]
-      : isTechOrWork
-      ? ["⚡", "🎙️", "💡", "🌐", "🚀"]
-      : ["🎙️", "📅"];
-    const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-    if (!title) {
-      title = isCelebration ? `${emoji} Grand Celebration Gala` : `${emoji} Community Welcome Session`;
+    if (combinedText.includes("diwali")) {
+      title = `🪔 ${title || "Diwali Festive Gathering"}`;
+    } else if (combinedText.includes("dinner") || combinedText.includes("food")) {
+      title = `🍽️ ${title || "Team Dinner Party"}`;
+    } else if (isCelebration) {
+      title = `🎉 ${title || "Grand Celebration Gala"}`;
+    } else if (isTechOrWork) {
+      title = `⚡ ${title || "Keynote & Innovation Session"}`;
     } else {
-      title = `${emoji} ${title}`;
+      title = `🎙️ ${title || "Community Welcome Session"}`;
     }
   }
 
+  // Description
   let description = "";
-  if (isCelebration) {
+  if (combinedText.includes("diwali") || combinedText.includes("dinner")) {
+    description = `Join colleagues and team members for an exciting gathering at "${title}"! Attendees will enjoy festive celebrations, great food, sharing memorable experiences, and warm community bonding. Don't miss out on the festivities! 🎉`;
+  } else if (isCelebration) {
     description = `Get ready for an exciting gathering at "${title}"! ${
       speakerName ? `Hosted with special guest ${speakerName}, guests` : "Guests and attendees"
     } will enjoy vibrant celebrations, memorable activities, and warm community bonding. Don't miss out on the festivities! 🎉`;
@@ -268,7 +297,7 @@ function parseSingleSessionText(
     title,
     speaker_name: speakerName,
     description,
-    tags,
+    tags: cleanTags,
     start_time: startTimeStr,
     end_time: endTimeStr,
     location,
@@ -377,22 +406,23 @@ export class AiAgendaService {
       )}`,
       ``,
       `TASK: Analyze the user's prompt or voice transcript and generate complete agenda sessions.`,
-      `- If the user describes a single session (e.g. "Keynote by Sarah at 10 AM"), output exactly 1 session in the 'sessions' array.`,
-      `- If the user describes multiple sessions, schedule breakdown, or full agenda (e.g. "1. Keynote 2. Workshop 3. Lunch"), output ALL corresponding sessions in chronological order in the 'sessions' array.`,
+      `- If the user describes a single session (e.g. "team dinner with Diwali celebration"), output 1 or 2 well-defined sessions in the 'sessions' array.`,
+      `- If the user describes multiple sessions, schedule breakdown, or full agenda, output ALL corresponding sessions in chronological order in the 'sessions' array.`,
       ``,
       `CRITICAL RULES:`,
-      `1. TIME ASSIGNMENT:`,
-      `   - When the user specifies times (e.g. "from 6 PM to 7 PM"), map them directly to '${eventDateYMD}THH:mm:ss'.`,
-      `   - If user did NOT state times, assign realistic, non-overlapping chronological times on '${eventDateYMD}' (e.g. starting at 10:00 AM or after the last existing session).`,
-      `   - 'start_time' and 'end_time' MUST NEVER BE EMPTY OR NULL. Always provide valid 'YYYY-MM-DDTHH:mm:ss' strings.`,
+      `1. NEVER INCLUDE CONVERSATIONAL PROMPT PHRASES IN TITLES:`,
+      `   - Do NOT include 'can you create', 'I can you create', 'please make', 'agenda for', or 'we are going to have' in session titles.`,
+      `   - Titles must be creative, memorable, and 2 to 7 words representing the actual event or activity (e.g. '🪔 Diwali Team Dinner & Celebration', '🎉 Welcome Gala Kickoff', '⚡ Cloud Architecture Masterclass').`,
       ``,
-      `2. SPEAKER & LOCATION:`,
+      `2. TIME ASSIGNMENT & SENSITIVITY:`,
+      `   - If user specified times, map them directly to '${eventDateYMD}THH:mm:ss'.`,
+      `   - If user mentions dinner, evening, gala, or party without exact hours, schedule in the evening (e.g. 19:00 to 21:00 or 19:30 to 21:30).`,
+      `   - If user mentions lunch, schedule around 12:30 or 13:00.`,
+      `   - If user mentions breakfast, schedule around 09:00.`,
+      `   - 'start_time' and 'end_time' MUST NEVER BE EMPTY OR NULL. Always provide valid 'YYYY-MM-DDTHH:mm:ss' or 'HH:mm' strings.`,
+      ``,
+      `3. SPEAKER & LOCATION:`,
       `   - If mentioned, extract speaker_name and location. If not mentioned or not applicable, set them to empty string "".`,
-      ``,
-      `3. SESSION TITLES:`,
-      `   - Make session titles creative, punchy, and clear (2 to 7 words).`,
-      `   - For celebrations/parties, use vibrant fitting emojis (🎉, 🏆, 🍕, 🎵, 🥳).`,
-      `   - For tech/professional, use sharp icons (⚡, 🎙️, 💡, 🚀).`,
       ``,
       `4. DESCRIPTIONS:`,
       `   - 2 to 4 rich, sensible sentences summarizing what takes place in the session.`,
@@ -415,8 +445,8 @@ export class AiAgendaService {
       },
     ];
 
-    // Try primary model, with automatic fallback models if 404/retired
-    const candidateModels = Array.from(new Set([gemini.model, "gemini-1.5-flash", "gemini-2.0-flash"]));
+    // Try gemini-3-flash-preview, then gemini-3.5-flash-lite
+    const candidateModels = Array.from(new Set([gemini.model, "gemini-3-flash-preview", "gemini-3.5-flash-lite"]));
 
     for (const modelToTry of candidateModels) {
       try {
@@ -456,7 +486,10 @@ export class AiAgendaService {
 
         if (rawSessionsList.length === 0) continue;
 
-        let currentDefaultHour = 10;
+        // Contextual default start hour for fallback (dinner = 19:00, otherwise 10:00)
+        const isEvening = /dinner|evening|gala|party/i.test(prompt);
+        let currentDefaultHour = isEvening ? 19 : 10;
+
         const sessions: GeneratedAgendaSession[] = rawSessionsList.map((rawSession, idx) => {
           const startTimeFormatted = parseToLocalDatetimeString(
             rawSession.start_time,
@@ -468,9 +501,9 @@ export class AiAgendaService {
             rawSession.end_time,
             eventDateYMD,
             currentDefaultHour + 1,
-            0
+            30
           );
-          currentDefaultHour = (currentDefaultHour + 1) % 24;
+          currentDefaultHour = (currentDefaultHour + 2) % 24;
 
           return {
             title: String(rawSession.title || `Agenda Session ${idx + 1}`).slice(0, 100),
