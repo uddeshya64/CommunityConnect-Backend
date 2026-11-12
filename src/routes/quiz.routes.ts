@@ -1,6 +1,6 @@
 import express from "express";
 import {
-  createQuiz, getQuizzes, addQuestion, startQuiz,
+  createQuiz, getQuizzes, addQuestion, startQuiz, resetQuiz,
   deleteQuiz, deleteQuestion, getActiveQuiz, updateQuiz, updateQuestion
 } from "../controllers/quiz.controller";
 import { authenticate } from "../middlewares/auth.middleware";
@@ -30,5 +30,8 @@ router.delete("/:quizId/questions/:questionId", deleteQuestion);
 
 // /api/events/:eventId/quizzes/:quizId/start
 router.post("/:quizId/start", startQuiz);
+
+// /api/events/:eventId/quizzes/:quizId/reset
+router.post("/:quizId/reset", resetQuiz);
 
 export default router;

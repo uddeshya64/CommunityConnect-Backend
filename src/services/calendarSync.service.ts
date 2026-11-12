@@ -6,8 +6,16 @@ const prisma = new PrismaClient();
 /**
  * Format JavaScript Date into UTC iCalendar format (YYYYMMDDTHHMMSSZ)
  */
-function formatICalDate(date: Date): string {
-  return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+function formatICalDate(date: any): string {
+  try {
+    const d = date instanceof Date ? date : new Date(date);
+    if (isNaN(d.getTime())) {
+      return new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    }
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  } catch {
+    return new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  }
 }
 
 export interface ExternalCalendarEvent {
@@ -166,22 +174,23 @@ export class CalendarSyncService {
     for (const agenda of agendas) {
       const timeline = agenda.timeline;
       const event = agenda.event;
+      if (!timeline || !event) continue;
 
-      const startTime = formatICalDate(new Date(timeline.start_time));
+      const startTime = formatICalDate(timeline.start_time || new Date());
       const endTime = timeline.end_time
-        ? formatICalDate(new Date(timeline.end_time))
-        : formatICalDate(new Date(new Date(timeline.start_time).getTime() + 3600000));
+        ? formatICalDate(timeline.end_time)
+        : formatICalDate(new Date(new Date(timeline.start_time || Date.now()).getTime() + 3600000));
 
-      const summary = `[${event.title}] ${timeline.title}`;
+      const summary = `[${event.title || 'Event'}] ${timeline.title || 'Session'}`;
       const description = [
         timeline.description || '',
         timeline.speaker_name ? `Speaker: ${timeline.speaker_name}` : '',
-        `Match Score: ${Math.round(agenda.match_score * 100)}%`
+        `Match Score: ${Math.round((agenda.match_score || 0.9) * 100)}%`
       ].filter(Boolean).join('\\n');
 
       lines.push(
         'BEGIN:VEVENT',
-        `UID:agenda-${agenda.id}-${timeline.id}@eventrix.app`,
+        `UID:agenda-${agenda.id}-${timeline.id || 't'}@eventrix.app`,
         `DTSTAMP:${formatICalDate(new Date())}`,
         `DTSTART:${startTime}`,
         `DTEND:${endTime}`,
@@ -200,16 +209,30 @@ export class CalendarSyncService {
   /**
    * Generate direct Google Calendar web add link for a specific session
    */
-  static generateGoogleCalendarLink(sessionTitle: string, eventTitle: string, description: string, startTime: Date, endTime?: Date | null, location?: string | null): string {
-    const startStr = formatICalDate(new Date(startTime));
-    const endStr = endTime 
-      ? formatICalDate(new Date(endTime))
-      : formatICalDate(new Date(new Date(startTime).getTime() + 3600000));
+  static generateGoogleCalendarLink(
+    sessionTitle?: string,
+    eventTitle?: string,
+    description?: string,
+    startTime?: any,
+    endTime?: any,
+    location?: string | null
+  ): string {
+    try {
+      const sTitle = sessionTitle || 'Session';
+      const eTitle = eventTitle || 'Event';
+      const desc = description || '';
+      const startStr = formatICalDate(startTime || new Date());
+      const endStr = endTime 
+        ? formatICalDate(endTime)
+        : formatICalDate(new Date((startTime ? new Date(startTime).getTime() : Date.now()) + 3600000));
 
-    const details = encodeURIComponent(`${description}\n\nOrganized by Eventrix (${eventTitle})`);
-    const title = encodeURIComponent(`${sessionTitle} - ${eventTitle}`);
-    const loc = encodeURIComponent(location || 'Online Session');
+      const details = encodeURIComponent(`${desc}\n\nOrganized by Eventrix (${eTitle})`);
+      const title = encodeURIComponent(`${sTitle} - ${eTitle}`);
+      const loc = encodeURIComponent(location || 'Online Session');
 
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startStr}/${endStr}&details=${details}&location=${loc}`;
+      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startStr}/${endStr}&details=${details}&location=${loc}`;
+    } catch {
+      return '';
+    }
   }
 }

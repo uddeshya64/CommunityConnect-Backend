@@ -19,18 +19,28 @@ export const AgendaController = {
       const eventId = req.query.eventId ? Number(req.query.eventId) : undefined;
       const agendas = await RecommendationService.getUserAgenda(userId, eventId);
 
-      // Enhance with Google Calendar quick links
-      const enhancedAgendas = agendas.map((agenda: any) => ({
-        ...agenda,
-        googleCalendarLink: CalendarSyncService.generateGoogleCalendarLink(
-          agenda.timeline.title,
-          agenda.event.title,
-          agenda.timeline.description || '',
-          agenda.timeline.start_time,
-          agenda.timeline.end_time,
-          agenda.timeline.location || agenda.event.location
-        )
-      }));
+      // Enhance with Google Calendar quick links safely
+      const enhancedAgendas = (agendas || []).map((agenda: any) => {
+        let googleCalendarLink = '';
+        try {
+          if (agenda.timeline) {
+            googleCalendarLink = CalendarSyncService.generateGoogleCalendarLink(
+              agenda.timeline?.title || 'Session',
+              agenda.event?.title || 'Event',
+              agenda.timeline?.description || '',
+              agenda.timeline?.start_time,
+              agenda.timeline?.end_time,
+              agenda.timeline?.location || agenda.event?.location || ''
+            );
+          }
+        } catch (e) {
+          // ignore error
+        }
+        return {
+          ...agenda,
+          googleCalendarLink
+        };
+      });
 
       // Query database user_settings directly to check if Google Calendar is connected
       const userDb = await prisma.user.findUnique({
@@ -46,7 +56,8 @@ export const AgendaController = {
         data: enhancedAgendas
       });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error('[GET_USER_AGENDA_ERROR]', error);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
   },
 
@@ -109,10 +120,31 @@ export const AgendaController = {
 
       const saved = await RecommendationService.saveEventAgenda(userId, eventId, choices);
 
+      // Enhance with Google Calendar quick links safely
+      const enhancedSaved = (saved || []).map((agenda: any) => {
+        let googleCalendarLink = '';
+        try {
+          if (agenda.timeline) {
+            googleCalendarLink = CalendarSyncService.generateGoogleCalendarLink(
+              agenda.timeline?.title || 'Session',
+              agenda.event?.title || 'Event',
+              agenda.timeline?.description || '',
+              agenda.timeline?.start_time,
+              agenda.timeline?.end_time,
+              agenda.timeline?.location || agenda.event?.location || ''
+            );
+          }
+        } catch { }
+        return {
+          ...agenda,
+          googleCalendarLink
+        };
+      });
+
       res.json({
         success: true,
         message: 'Personal agenda updated successfully',
-        data: saved
+        data: enhancedSaved
       });
     } catch (error: any) {
       console.error('[AGENDA_SAVE_ERROR]', error);

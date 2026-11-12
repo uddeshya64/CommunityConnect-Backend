@@ -482,6 +482,24 @@ export function extractSchedule(
     );
   }
 
+  // Handle explicit durations such as "48 hours", "24 hrs", "3 days"
+  const hourDurationMatch = lower.match(/\b(\d{1,3})\s*(?:hours?|hrs?|hr)\b/i) || lower.match(/\b(\d{1,3})\s*[- ]\s*hours?\b/i);
+  const dayDurationMatch = lower.match(/\b(\d{1,3})\s*(?:days?)\b/i) || lower.match(/\b(\d{1,3})\s*[- ]\s*days?\b/i);
+
+  if (start && !secondDate && !rangeMatch) {
+    if (hourDurationMatch) {
+      const hours = parseInt(hourDurationMatch[1], 10);
+      if (Number.isFinite(hours) && hours > 0) {
+        end = new Date(new Date(start).getTime() + hours * 60 * 60 * 1000).toISOString();
+      }
+    } else if (dayDurationMatch) {
+      const days = parseInt(dayDurationMatch[1], 10);
+      if (Number.isFinite(days) && days > 0) {
+        end = new Date(new Date(start).getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+      }
+    }
+  }
+
   if (start && end && new Date(end) <= new Date(start)) {
     const shifted = new Date(new Date(start).getTime() + 3 * 60 * 60 * 1000);
     end = shifted.toISOString();
@@ -553,19 +571,19 @@ function extractTeamSizes(
   } = {};
 
   const solo = /\b(solo|single participant|individual entry|individual participation|one per participant|no teams?|not a team)\b/i.test(text);
-  const team = /\b(teams?|group of|group entry|participat\w+ as a team|team based|team of)\b/i.test(text);
+  const team = /\b(teams?|group of|group entry|participat\w+ as a team|team based|team of|team type)\b/i.test(text);
 
   if (solo) result.registration_type = "solo";
   else if (team) result.registration_type = "team";
 
   const upTo = text.match(
-    /\b(?:up to|maximum of|max(?:imum)?|maximum)\s*(\d{1,2})\s*(?:members?|people|participants?|students?|per team)?/i
+    /\b(?:up to|maximum of|max(?:imum)?|maximum)\s*(?:number\s+of\s+)?(?:team[\s-]*members?|teammates?|temmates?|members?|people|participants?|students?|per team)?(?:\s+(?:is|are|of|to|be|equals?|:))?\s*(\d{1,2})\b/i
   );
   const atLeast = text.match(
-    /\b(?:at least|minimum of|min(?:imum)?)\s*(\d{1,2})\s*(?:members?|people|participants?|students?|per team)?/i
+    /\b(?:at least|minimum of|min(?:n)?(?:imum)?|minimum)\s*(?:number\s+of\s+)?(?:team[\s-]*members?|teammates?|temmates?|members?|people|participants?|students?|per team)?(?:\s+(?:is|are|of|to|be|equals?|:))?\s*(\d{1,2})\b/i
   );
   const range = text.match(
-    /\b(\d{1,2})\s*(?:-|–|to)\s*(\d{1,2})\s*(?:members?|people|participants?|students?|per team)\b/i
+    /\b(\d{1,2})\s*(?:-|–|to)\s*(\d{1,2})\s*(?:members?|people|participants?|students?|per team|team[\s-]*members?|teammates?|temmates?)\b/i
   );
 
   let max: number | undefined;
@@ -599,7 +617,7 @@ function extractType(text: string): string | undefined {
   for (const [pattern, type] of CATEGORY_KEYWORDS) {
     if (pattern.test(text)) return normaliseEventType(type);
   }
-  return undefined;
+  return "Custom";
 }
 
 function extractLocation(text: string): string | undefined {
@@ -644,6 +662,13 @@ const TITLE_CLAUSE_BREAKERS = new Set([
   "this",
   "event",
   "events",
+  "which",
+  "will",
+  "start",
+  "starts",
+  "starting",
+  "where",
+  "when",
 ]);
 
 function deriveTitleFrom(text: string): string {
@@ -785,19 +810,24 @@ function extractTitle(text: string): string | undefined {
   return capitalised.slice(0, 150);
 }
 
-function buildDescription(text: string): string {
+function buildDescription(text: string): string | undefined {
   const cleaned = text
     .replace(/\s+/g, " ")
     .replace(/^(um|uh|so|okay|ok)[,\s]*/i, "")
     .trim();
 
-  if (cleaned.length >= 20) return cleaned.slice(0, 1000);
+  // If the text is an agent instruction or creation prompt rather than a real event description,
+  // leave it undefined so the AI/fallback generator crafts a rich, creative description.
+  if (
+    /^(?:create|make|plan|schedule|host|organize|set up|i want to|we want to|please create)\b/i.test(
+      cleaned
+    )
+  ) {
+    return undefined;
+  }
 
-  return (
-    cleaned
-      ? `${cleaned}.`
-      : "Event created with the Eventrix AI event creator."
-  ).slice(0, 1000);
+  if (cleaned.length >= 50) return cleaned.slice(0, 1000);
+  return undefined;
 }
 
 /**

@@ -397,24 +397,37 @@ export class RecommendationService {
         ? (AgendaStatus.ACCEPTED || 'ACCEPTED')
         : (AgendaStatus.DECLINED || 'DECLINED');
 
-      await (db as any).userAgenda.upsert({
-        where: {
-          user_id_timeline_id: {
+      if ((db as any).userAgenda) {
+        await (db as any).userAgenda.upsert({
+          where: {
+            user_id_timeline_id: {
+              user_id: userId,
+              timeline_id: timelineId
+            }
+          },
+          create: {
             user_id: userId,
-            timeline_id: timelineId
+            event_id: eventId,
+            timeline_id: timelineId,
+            status: targetStatus,
+            match_score: 0.9
+          },
+          update: {
+            status: targetStatus
           }
-        },
-        create: {
-          user_id: userId,
-          event_id: eventId,
-          timeline_id: timelineId,
-          status: targetStatus,
-          match_score: 0.9
-        },
-        update: {
-          status: targetStatus
-        }
-      });
+        });
+      } else {
+        await db.$executeRawUnsafe(
+          `INSERT INTO user_agendas (user_id, event_id, timeline_id, status, match_score, created_at)
+           VALUES ($1, $2, $3, $4::"AgendaStatus", 0.9, NOW())
+           ON CONFLICT (user_id, timeline_id)
+           DO UPDATE SET status = $4::"AgendaStatus";`,
+          userId,
+          eventId,
+          timelineId,
+          targetStatus
+        );
+      }
     }
 
     return this.getUserAgenda(userId, eventId);

@@ -143,6 +143,16 @@ export const NotificationController = {
         take: 10
       });
 
+      // 8b. Fetch triggered event reminder alerts (dates announced & registrations open)
+      const triggeredReminders = await prisma.eventReminder.findMany({
+        where: { user_id: userId, notified_at: { not: null } },
+        include: {
+          event: { select: { id: true, title: true, banner_url: true, start_date: true } }
+        },
+        orderBy: { notified_at: 'desc' },
+        take: 20
+      });
+
       // 9. Format all notifications consistently with rich titles, messages, and action URLs
       const liveQuizzesFormatted = liveQuizzes.map(lq => ({
         id: `quiz_${lq.id}`,
@@ -226,6 +236,20 @@ export const NotificationController = {
         url: `/events/${r.event_id}`
       }));
 
+      const remindersFormatted = triggeredReminders.map(rem => ({
+        id: `reminder_${rem.id}`,
+        type: 'EVENT_REMINDER',
+        eventId: rem.event_id,
+        title: `🔔 Registration Open: ${rem.event.title}`,
+        message: rem.event.start_date
+          ? `Dates are announced (${new Date(rem.event.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}) and registrations are open!`
+          : `Registrations for "${rem.event.title}" are now open!`,
+        eventName: rem.event.title,
+        eventBanner: rem.event.banner_url || null,
+        created_at: rem.notified_at || rem.created_at,
+        url: `/events/${rem.event_id}`
+      }));
+
       // 10. Combine and sort by date descending
       const allNotifications = [
         ...liveQuizzesFormatted,
@@ -233,7 +257,8 @@ export const NotificationController = {
         ...teamInvitesFormatted,
         ...staffInvitesFormatted,
         ...roleUpdatesFormatted,
-        ...registrationsFormatted
+        ...registrationsFormatted,
+        ...remindersFormatted
       ].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );

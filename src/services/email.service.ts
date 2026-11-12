@@ -275,15 +275,17 @@ export class EmailService {
       // --------------------------------------------------
       // FORMAT EVENT DATE
       // --------------------------------------------------
-      const formattedDate = new Date(reg.event.start_date).toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZoneName: "short",
-      });
+      const formattedDate = reg.event.start_date
+        ? new Date(reg.event.start_date).toLocaleDateString("en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            timeZoneName: "short",
+          })
+        : "Coming Soon (Dates TBA)";
 
       const eventUrl = reg.team_id
         ? `${FRONTEND_URL}/dashboard/team/${reg.team_id}`
@@ -509,6 +511,88 @@ Eventrix
     } catch (error) {
       console.error("[EMAIL_ERROR] Failed to send registration confirmation email:", error);
       // Do not throw. Registration should not fail because confirmation email failed.
+    }
+  }
+
+  // ==================================================
+  // 4. SEND EVENT REMINDER EMAIL (DATES ANNOUNCED / REG OPEN)
+  // ==================================================
+  static async sendEventReminderEmail(
+    toEmail: string,
+    toName: string,
+    event: {
+      id: number;
+      title: string;
+      start_date: Date | null;
+      end_date: Date | null;
+      location?: string | null;
+      mode?: string;
+      registration_fee?: any;
+    }
+  ) {
+    try {
+      const startStr = event.start_date
+        ? new Date(event.start_date).toLocaleString("en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "Coming Soon";
+      const endStr = event.end_date
+        ? new Date(event.end_date).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "";
+      const scheduleStr = endStr ? `${startStr} – ${endStr}` : startStr;
+      const numericFee = Number(event.registration_fee ?? 0);
+      const feeStr = numericFee <= 0 ? "Free" : `₹${numericFee.toLocaleString("en-IN")}`;
+      const eventUrl = `${FRONTEND_URL}/events/${event.id}`;
+
+      const emailData: BrevoEmailPayload = {
+        sender: {
+          name: BREVO_SENDER_NAME,
+          email: BREVO_SENDER_EMAIL,
+        },
+        to: [{ email: toEmail, name: toName }],
+        subject: `Registrations Are Open: ${event.title}!`,
+        textContent: `Hi ${toName},\n\nGood news! "${event.title}" now has confirmed dates and registrations are open.\n\nSchedule: ${scheduleStr}\nLocation: ${event.location || (event.mode === "online" ? "Online" : "TBA")}\nEntry Fee: ${feeStr}\n\nRegister now: ${eventUrl}\n\n— Eventrix`.trim(),
+        htmlContent: `
+          <div style="background-color: #f4f4f5; padding: 36px 18px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+            <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e4e4e7; border-radius: 16px; overflow: hidden;">
+              <div style="height: 6px; background: linear-gradient(90deg, #10b981 0%, #4f46e5 100%);"></div>
+              <div style="padding: 32px 24px;">
+                <span style="display: inline-block; background-color: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 10px; border-radius: 9999px;">
+                  Registration Open
+                </span>
+                <h2 style="color: #09090b; font-size: 22px; margin: 14px 0 8px;">${event.title}</h2>
+                <p style="color: #52525b; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
+                  Hi ${toName || "there"}, you asked us to remind you when dates are announced and registrations open. Spots are now live!
+                </p>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+                  <p style="margin: 0 0 8px; font-size: 13px; color: #334155;"><strong>Schedule:</strong> ${scheduleStr}</p>
+                  <p style="margin: 0 0 8px; font-size: 13px; color: #334155;"><strong>Location:</strong> ${event.location || (event.mode === "online" ? "Online" : "TBA")}</p>
+                  <p style="margin: 0; font-size: 13px; color: #334155;"><strong>Entry Fee:</strong> ${feeStr}</p>
+                </div>
+                <div style="text-align: center;">
+                  <a href="${eventUrl}" style="display: inline-block; padding: 13px 28px; background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; border-radius: 12px;">
+                    Participate Now
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        `,
+      };
+
+      await sendBrevoEmail(emailData);
+    } catch (err) {
+      console.error("[EMAIL_ERROR] Failed to send event reminder email:", err);
     }
   }
 }
