@@ -22,21 +22,21 @@ export const createQuiz = async (req: Request, res: Response): Promise<void> => 
         status: "DRAFT",
         ...(Array.isArray(questions) && questions.length > 0
           ? {
-              questions: {
-                create: questions.map((q: any, idx: number) => ({
-                  text: String(q.text || ""),
-                  time_limit: Number(q.time_limit) || 30,
-                  points: Number(q.points) || 1000,
-                  order: typeof q.order === "number" ? q.order : idx,
-                  options: {
-                    create: (q.options || []).map((opt: any) => ({
-                      text: String(opt.text || ""),
-                      is_correct: Boolean(opt.is_correct),
-                    })),
-                  },
-                })),
-              },
-            }
+            questions: {
+              create: questions.map((q: any, idx: number) => ({
+                text: String(q.text || ""),
+                time_limit: Number(q.time_limit) || 30,
+                points: Number(q.points) || 1000,
+                order: typeof q.order === "number" ? q.order : idx,
+                options: {
+                  create: (q.options || []).map((opt: any) => ({
+                    text: String(opt.text || ""),
+                    is_correct: Boolean(opt.is_correct),
+                  })),
+                },
+              })),
+            },
+          }
           : {}),
       },
       include: {
@@ -173,11 +173,72 @@ export const addQuestion = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+// Reset a quiz (Wipe leaderboard, responses, sessions, and set status to DRAFT)
+export const resetQuiz = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const quizId = Array.isArray(req.params.quizId) ? req.params.quizId[0] : req.params.quizId;
+    const qIdNum = parseInt(quizId);
+
+    // 1. Delete previous responses for all questions in this quiz
+    await prisma.quizResponse.deleteMany({
+      where: {
+        question: { quiz_id: qIdNum }
+      }
+    });
+
+    // 2. Delete previous leaderboard entries for this quiz
+    await prisma.quizLeaderboard.deleteMany({
+      where: { quiz_id: qIdNum }
+    });
+
+    // 3. Delete previous quiz sessions
+    await prisma.quizSession.deleteMany({
+      where: { quiz_id: qIdNum }
+    });
+
+    // 4. Reset quiz status to DRAFT
+    const quiz = await prisma.quiz.update({
+      where: { id: qIdNum },
+      data: { status: "DRAFT" }
+    });
+
+    // 5. Notify socket room if Socket.IO is initialized
+    try {
+      const { getQuizNamespace, clearRoomParticipants } = require("../socket/quiz.socket");
+      const quizNamespace = getQuizNamespace();
+      if (quizNamespace) {
+        clearRoomParticipants(`quiz_${qIdNum}`);
+        quizNamespace.to(`quiz_${qIdNum}`).emit("quiz_reset", { quizId: qIdNum });
+        quizNamespace.to(`quiz_${qIdNum}`).emit("room_players", { count: 0, players: [] });
+        quizNamespace.to(`quiz_${qIdNum}`).emit("quiz_state", { status: "WAITING", count: 0, players: [] });
+      }
+    } catch (sockErr) {
+      // socket optional
+    }
+
+    res.status(200).json({ success: true, message: "Quiz results and sessions have been reset", quiz });
+  } catch (error: any) {
+    console.error("Reset quiz error:", error);
+    res.status(500).json({ success: false, message: error.message || "Failed to reset quiz" });
+  }
+};
+
 // Start a quiz (Update status to LIVE & create QuizSession)
 export const startQuiz = async (req: Request, res: Response): Promise<void> => {
   try {
     const quizId = Array.isArray(req.params.quizId) ? req.params.quizId[0] : req.params.quizId;
     const qIdNum = parseInt(quizId);
+
+    // Always wipe previous game data so replay starts completely clean
+    await prisma.quizResponse.deleteMany({
+      where: { question: { quiz_id: qIdNum } }
+    });
+    await prisma.quizLeaderboard.deleteMany({
+      where: { quiz_id: qIdNum }
+    });
+    await prisma.quizSession.deleteMany({
+      where: { quiz_id: qIdNum }
+    });
 
     const quiz = await prisma.quiz.update({
       where: { id: qIdNum },
@@ -187,20 +248,23 @@ export const startQuiz = async (req: Request, res: Response): Promise<void> => {
       }
     });
 
-    // Create session in DB if not already in progress
-    let session = await prisma.quizSession.findFirst({
-      where: { quiz_id: qIdNum, status: "IN_PROGRESS" }
+    // Create fresh session in DB
+    const session = await prisma.quizSession.create({
+      data: {
+        quiz_id: qIdNum,
+        status: "IN_PROGRESS",
+        started_at: new Date()
+      }
     });
 
-    if (!session) {
-      session = await prisma.quizSession.create({
-        data: {
-          quiz_id: qIdNum,
-          status: "IN_PROGRESS",
-          started_at: new Date()
-        }
-      });
-    }
+    // Notify socket room
+    try {
+      const { getQuizNamespace } = require("../socket/quiz.socket");
+      const quizNamespace = getQuizNamespace();
+      if (quizNamespace) {
+        quizNamespace.to(`quiz_${qIdNum}`).emit("quiz_reset", { quizId: qIdNum });
+      }
+    } catch { }
 
     // Trigger push notifications asynchronously to all registered participants
     try {

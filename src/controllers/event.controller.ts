@@ -129,6 +129,32 @@ export const EventController = {
     }
   },
 
+  // POST /api/events/:id/reminder
+  async subscribeReminder(req: Request, res: Response) {
+    try {
+      const eventId = Number(req.params.id);
+      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+      const userId = req.user!.id;
+      const result = await EventService.subscribeReminder(eventId, userId);
+      res.json({ success: true, message: "Reminder set! We'll notify and email you once dates & registrations are open.", data: result });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // DELETE /api/events/:id/reminder
+  async unsubscribeReminder(req: Request, res: Response) {
+    try {
+      const eventId = Number(req.params.id);
+      if (isNaN(eventId)) return res.status(400).json({ error: "Invalid event ID" });
+      const userId = req.user!.id;
+      const result = await EventService.unsubscribeReminder(eventId, userId);
+      res.json({ success: true, message: "Reminder removed.", data: result });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+
   // POST /api/events/:eventId/banner
 async uploadBanner(req: Request, res: Response) {
   try {

@@ -386,7 +386,7 @@ export class AiAgendaService {
     }
 
     const offsetMs = (params.timeZoneOffsetMinutes ?? 0) * 60 * 1000;
-    const localStartDate = new Date(new Date(event.start_date).getTime() - offsetMs);
+    const localStartDate = new Date(new Date(event.start_date || Date.now()).getTime() - offsetMs);
     const eventDateYMD = localStartDate.toISOString().split("T")[0];
 
     const systemInstruction = [
@@ -395,7 +395,7 @@ export class AiAgendaService {
       `Event Category: ${event.type?.name || "General Event"}`,
       `Event Mode: ${event.mode}`,
       `Event Local Date: ${eventDateYMD}`,
-      `Event Date Range: ${event.start_date.toISOString()} to ${event.end_date.toISOString()}`,
+      `Event Date Range: ${event.start_date ? event.start_date.toISOString() : "TBA"} to ${event.end_date ? event.end_date.toISOString() : "TBA"}`,
       `Current Existing Timeline Sessions: ${JSON.stringify(
         event.timelines.map((t: any) => ({
           title: t.title,

@@ -128,14 +128,14 @@ export const EVENT_DRAFT_FIELDS: EventDraftFieldMeta[] = [
   {
     key: "start_date",
     label: "Start date & time",
-    question: "When does the event start (date and time)?",
-    required: true,
+    question: "When does the event start (date and time)? (Optional — skip for Coming Soon)",
+    required: false,
   },
   {
     key: "end_date",
     label: "End date & time",
-    question: "When does the event end (date and time)?",
-    required: true,
+    question: "When does the event end (date and time)? (Optional — skip for Coming Soon)",
+    required: false,
   },
   {
     key: "location",
@@ -208,11 +208,26 @@ export function computeMissingFields(
   draft: EventDraftValues
 ): string[] {
   const missing: string[] = [];
+  const isSolo = String(draft?.registration_type ?? "").toLowerCase() === "solo";
 
   for (const field of EVENT_DRAFT_FIELDS) {
+    const value = draft?.[field.key];
+
+    if (
+      (field.key === "start_date" || field.key === "end_date") &&
+      isDraftValuePresent(field.key, value) &&
+      Number.isNaN(new Date(value as string).getTime())
+    ) {
+      missing.push(field.key);
+      continue;
+    }
+
     if (!field.required) continue;
 
-    const value = draft?.[field.key];
+    // Solo events don't require team sizes to be explicitly provided by the user
+    if (isSolo && (field.key === "min_team_size" || field.key === "max_team_size")) {
+      continue;
+    }
 
     if (!isDraftValuePresent(field.key, value)) {
       missing.push(field.key);
@@ -222,13 +237,6 @@ export function computeMissingFields(
     if (field.key === "mode" && !EVENT_MODES.includes(value as never)) {
       missing.push(field.key);
       continue;
-    }
-
-    if (
-      (field.key === "start_date" || field.key === "end_date") &&
-      Number.isNaN(new Date(value as string).getTime())
-    ) {
-      missing.push(field.key);
     }
   }
 
@@ -270,9 +278,9 @@ export function mergeDraft<T extends EventDraftValues>(
  * valid: `EventService.createEvent` creates a custom `EventType` for them.
  */
 export function normaliseEventType(value: unknown): string {
-  if (typeof value !== "string") return "";
+  if (typeof value !== "string") return "Custom";
   const raw = value.trim();
-  if (!raw) return "";
+  if (!raw) return "Custom";
 
   const lower = raw.toLowerCase();
 
@@ -288,7 +296,7 @@ export function normaliseEventType(value: unknown): string {
   );
   if (partial) return partial;
 
-  return raw.slice(0, 50);
+  return "Custom";
 }
 
 export interface DraftValidationResult {

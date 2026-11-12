@@ -414,8 +414,6 @@ describe("eventDraft: missing information", () => {
       "description",
       "type",
       "mode",
-      "start_date",
-      "end_date",
       "registration_type",
       "registration_fee",
       "min_team_size",

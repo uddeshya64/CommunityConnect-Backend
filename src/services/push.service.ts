@@ -1,6 +1,7 @@
 import "dotenv/config";
 import webpush from 'web-push';
 import { PrismaClient } from '@prisma/client';
+import { sendRealtimeNotification } from '../socket/notification.socket';
 
 const prisma = new PrismaClient();
 
@@ -84,6 +85,30 @@ export const PushService = {
 
   async sendPushToUser(userId: number, payload: PushPayload) {
     try {
+      // 1. INSTANT REALTIME DISPATCH (< 50ms): Deliver immediately over WebSocket if user has the app open
+      sendRealtimeNotification(userId, {
+        id: payload.tag || `notif_${Date.now()}`,
+        title: payload.title || 'Eventrix Alert',
+        message: payload.body || '',
+        url: payload.url || `${(process.env.FRONTEND_URL || "http://localhost:3001").replace(/\/$/, "")}/notifications`,
+        tag: payload.tag,
+        type: payload.tag?.includes("reminder")
+          ? "EVENT_REMINDER"
+          : payload.tag?.includes("announcement")
+          ? "ANNOUNCEMENT"
+          : payload.tag?.includes("quiz")
+          ? "LIVE_QUIZ"
+          : payload.tag?.includes("staff")
+          ? "STAFF_INVITE"
+          : payload.tag?.includes("team")
+          ? "TEAM_INVITE"
+          : payload.tag?.includes("reg") || payload.tag?.includes("ticket")
+          ? "REGISTRATION"
+          : "SYSTEM",
+        created_at: new Date().toISOString(),
+      });
+
+      // 2. PARALLEL HIGH-URGENCY WEB PUSH: For devices in background, screen off, or closed browser
       const subscriptions = await prisma.pushSubscription.findMany({
         where: { user_id: userId },
       });
@@ -106,27 +131,32 @@ export const PushService = {
       let successful = 0;
       const invalidEndpointIds: number[] = [];
 
-      for (const sub of subscriptions) {
-        try {
-          const pushSubscriptionObj = {
-            endpoint: sub.endpoint,
-            keys: {
-              p256dh: sub.p256dh,
-              auth: sub.auth,
-            },
-          };
+      // Send to all device subscriptions concurrently with High Urgency flag
+      await Promise.all(
+        subscriptions.map(async (sub) => {
+          try {
+            const pushSubscriptionObj = {
+              endpoint: sub.endpoint,
+              keys: {
+                p256dh: sub.p256dh,
+                auth: sub.auth,
+              },
+            };
 
-          await webpush.sendNotification(pushSubscriptionObj, stringifiedPayload);
-          successful++;
-        } catch (err: any) {
-          // If subscription is expired or unsubscribed (410 Gone / 404 Not Found), prune it
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            invalidEndpointIds.push(sub.id);
-          } else {
-            console.error(`Failed to send push to subscription ${sub.id}:`, err.message);
+            await webpush.sendNotification(pushSubscriptionObj, stringifiedPayload, {
+              urgency: 'high',
+              TTL: 60 * 60 * 24,
+            });
+            successful++;
+          } catch (err: any) {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              invalidEndpointIds.push(sub.id);
+            } else {
+              console.error(`Failed to send push to subscription ${sub.id}:`, err.message);
+            }
           }
-        }
-      }
+        })
+      );
 
       if (invalidEndpointIds.length > 0) {
         await prisma.pushSubscription.deleteMany({

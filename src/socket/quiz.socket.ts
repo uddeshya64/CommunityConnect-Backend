@@ -6,8 +6,21 @@ const prisma = new PrismaClient();
 // In-memory room socket tracking: roomName -> Map<socketId, { userId: number; name: string; isHost: boolean }>
 const roomParticipants = new Map<string, Map<string, { userId: number; name: string; isHost: boolean }>>();
 
+let activeQuizNamespace: any = null;
+
+export function getQuizNamespace() {
+  return activeQuizNamespace;
+}
+
+export function clearRoomParticipants(roomName: string) {
+  if (roomParticipants.has(roomName)) {
+    roomParticipants.delete(roomName);
+  }
+}
+
 export function setupQuizSockets(io: Server) {
   const quizNamespace = io.of("/quiz");
+  activeQuizNamespace = quizNamespace;
 
   quizNamespace.on("connection", (socket: Socket) => {
     console.log(`[Quiz Socket] Client connected: ${socket.id}`);
@@ -73,7 +86,8 @@ export function setupQuizSockets(io: Server) {
           orderBy: { id: 'desc' }
         });
 
-        if (session?.status === "COMPLETED") {
+        // Only emit ended if session is COMPLETED and player is NOT the host
+        if (session?.status === "COMPLETED" && userNum !== 0) {
           const finalLeaderboard = await prisma.quizLeaderboard.findMany({
             where: { quiz_id: idNum },
             orderBy: { score: 'desc' },
@@ -110,12 +124,57 @@ export function setupQuizSockets(io: Server) {
       }
     });
 
+    // Reset quiz (Organizer only) - wipe all previous results, responses, and players
+    socket.on("reset_quiz", async ({ quizId }) => {
+      try {
+        const idNum = Number(quizId);
+        console.log(`[Quiz Socket] Resetting quiz ${idNum}`);
+        const roomName = `quiz_${idNum}`;
+
+        await prisma.quizResponse.deleteMany({
+          where: { question: { quiz_id: idNum } }
+        });
+        await prisma.quizLeaderboard.deleteMany({
+          where: { quiz_id: idNum }
+        });
+        await prisma.quizSession.deleteMany({
+          where: { quiz_id: idNum }
+        });
+        await prisma.quiz.update({
+          where: { id: idNum },
+          data: { status: "DRAFT" }
+        });
+
+        // Reset in-memory room tracking
+        if (roomParticipants.has(roomName)) {
+          roomParticipants.get(roomName)!.clear();
+        }
+
+        quizNamespace.to(roomName).emit("quiz_reset", { quizId: idNum });
+        quizNamespace.to(roomName).emit("room_players", { count: 0, players: [] });
+        quizNamespace.to(roomName).emit("quiz_state", { status: "WAITING", count: 0, players: [] });
+      } catch (err) {
+        console.error("[Quiz Socket] reset_quiz error:", err);
+      }
+    });
+
     // Start quiz (Organizer only)
     socket.on("start_quiz", async ({ quizId }) => {
       try {
         const idNum = Number(quizId);
         console.log(`[Quiz Socket] Starting quiz ${idNum}`);
         const roomName = `quiz_${idNum}`;
+
+        // Wipe previous game responses and leaderboards so replay starts completely clean
+        await prisma.quizResponse.deleteMany({
+          where: { question: { quiz_id: idNum } }
+        });
+        await prisma.quizLeaderboard.deleteMany({
+          where: { quiz_id: idNum }
+        });
+        await prisma.quizSession.deleteMany({
+          where: { quiz_id: idNum, status: "COMPLETED" }
+        });
 
         const quiz = await prisma.quiz.findUnique({
           where: { id: idNum },
