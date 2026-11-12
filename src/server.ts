@@ -19,6 +19,7 @@ import { PrismaClient } from "@prisma/client";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { setupQuizSockets } from "./socket/quiz.socket";
+import { setupNotificationSockets } from "./socket/notification.socket";
 
 // Passport configuration
 import "./config/passport";
@@ -414,6 +415,7 @@ const startServer = async () => {
       allowEIO3: true
     });
     setupQuizSockets(io);
+    setupNotificationSockets(io);
 
     // Start Express server
     httpServer.listen(PORT, () => {

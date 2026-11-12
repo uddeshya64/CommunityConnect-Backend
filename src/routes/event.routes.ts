@@ -20,6 +20,8 @@ router.get('/', optionalAuthenticate, EventController.getFeed);
 router.post( "/:eventId/banner",authenticate, upload.single("banner"),EventController.uploadBanner); // banner image in event
 router.post('/:id/save', authenticate, EventController.save);
 router.delete('/:id/save', authenticate, EventController.unsave);
+router.post('/:id/reminder', authenticate, EventController.subscribeReminder);
+router.delete('/:id/reminder', authenticate, EventController.unsubscribeReminder);
 router.get('/:id', optionalAuthenticate, EventController.getOne);
 
 router.get('/:eventId/timelines', optionalAuthenticate, EventTimelineController.getByEvent);

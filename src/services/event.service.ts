@@ -1,5 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { EVENT_PERMISSIONS, getDefaultPermissionsForRole } from '../utils/constants/permissions';
+import { EmailService } from './email.service';
+import { PushService } from './push.service';
 
 import supabase from "../config/supabase";
 
@@ -88,7 +90,7 @@ export class EventService {
     return prisma.$transaction(async (tx) => {
       const {
         title, description, type, mode, banner_url, logo_url,
-        start_date, end_date, registration_type, registration_fee,
+        start_date, end_date, is_registration_open, registration_type, registration_fee,
         max_team_size, min_team_size, capacity, location, rewards,
         custom_fields, custom_form_schema, registration_form_schema,
       } = data;
@@ -130,8 +132,9 @@ export class EventService {
           mode,
           banner_url: banner_url ?? undefined,
           logo_url: logo_url ?? undefined,
-          start_date: start_date instanceof Date ? start_date : new Date(start_date),
-          end_date: end_date instanceof Date ? end_date : new Date(end_date),
+          start_date: start_date ? (start_date instanceof Date ? start_date : new Date(start_date)) : null,
+          end_date: end_date ? (end_date instanceof Date ? end_date : new Date(end_date)) : null,
+          is_registration_open: typeof is_registration_open === "boolean" ? is_registration_open : true,
           registration_type,
           registration_fee: registration_fee ?? 0,
           max_team_size, min_team_size,
@@ -303,7 +306,8 @@ export class EventService {
       team_id: null as number | null,
       team_name: null as string | null,
       registration_id: null as number | null,
-      is_saved: false
+      is_saved: false,
+      has_reminder: false
     };
 
     if (userId) {
@@ -370,13 +374,24 @@ export class EventService {
       if (saved) {
         userContext.is_saved = true;
       }
+
+      const reminder = await prisma.eventReminder.findUnique({
+        where: { event_id_user_id: { event_id: eventId, user_id: userId } }
+      });
+      if (reminder && !reminder.notified_at) {
+        userContext.has_reminder = true;
+      }
     }
+
+    const reminderCount = await prisma.eventReminder.count({
+      where: { event_id: eventId, notified_at: null }
+    });
 
     const { type, ...rest } = event;
     const aggregatedTags = Array.from(
       new Set((event.timelines || []).flatMap((t) => t.tags || []))
     );
-    return { ...rest, type: type.name, tags: aggregatedTags, user_context: userContext };
+    return { ...rest, type: type.name, tags: aggregatedTags, reminder_count: reminderCount, user_context: userContext };
   }
 
   // 4. UPDATE EVENT
@@ -407,8 +422,17 @@ export class EventService {
     const { type, ...updateData } = data;
     const finalUpdateData: any = { ...updateData };
 
-    // NOTE: custom_fields is passed through automatically via ...updateData above
-    // since it is now part of UpdateEventSchema. No extra handling needed here.
+    const effectiveStartDate =
+      finalUpdateData.start_date !== undefined ? finalUpdateData.start_date : event.start_date;
+    const effectiveEndDate =
+      finalUpdateData.end_date !== undefined ? finalUpdateData.end_date : event.end_date;
+
+    if ((effectiveStartDate && !effectiveEndDate) || (!effectiveStartDate && effectiveEndDate)) {
+      throw new Error("Please provide both start date and end date, or leave both blank for Coming Soon.");
+    }
+    if (effectiveStartDate && effectiveEndDate && new Date(effectiveEndDate) <= new Date(effectiveStartDate)) {
+      throw new Error("End date must be after start date");
+    }
 
     if (type) {
       // Find or create the event type (case-insensitive)
@@ -441,8 +465,97 @@ export class EventService {
       }
     });
 
+    // Dispatch Email + Notification reminders when dates are announced/updated and registrations are open
+    const hadDatesBefore = Boolean(event.start_date && event.end_date);
+    const hasDatesNow = Boolean(updatedEvent.start_date && updatedEvent.end_date);
+    const datesChanged =
+      hasDatesNow &&
+      (!hadDatesBefore ||
+        event.start_date?.getTime() !== updatedEvent.start_date?.getTime() ||
+        event.end_date?.getTime() !== updatedEvent.end_date?.getTime());
+    const regJustOpened = !event.is_registration_open && Boolean(updatedEvent.is_registration_open);
+
+    if (hasDatesNow && updatedEvent.is_registration_open && (datesChanged || regJustOpened)) {
+      EventService.dispatchEventReminders(updatedEvent).catch((err) => {
+        console.error(`[REMINDER_DISPATCH_ERROR] Event ${eventId}:`, err);
+      });
+    }
+
     const { type: updatedType, ...rest } = updatedEvent;
     return { ...rest, type: updatedType.name };
+  }
+
+  private static async dispatchEventReminders(event: {
+    id: number;
+    title: string;
+    start_date: Date | null;
+    end_date: Date | null;
+    location: string | null;
+    mode: string;
+    registration_fee: any;
+  }) {
+    const waitingSubscribers = await prisma.eventReminder.findMany({
+      where: { event_id: event.id, notified_at: null },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+
+    if (waitingSubscribers.length === 0) return;
+
+    const now = new Date();
+    await prisma.eventReminder.updateMany({
+      where: { id: { in: waitingSubscribers.map((s) => s.id) } },
+      data: { notified_at: now },
+    });
+
+    const datePreview = event.start_date
+      ? new Date(event.start_date).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : "Updated Schedule";
+
+    await Promise.allSettled(
+      waitingSubscribers.map(async (sub) => {
+        if (!sub.user) return;
+        await EmailService.sendEventReminderEmail(sub.user.email, sub.user.name, event);
+        await PushService.sendPushToUser(sub.user.id, {
+          title: `🔔 Registration Open: ${event.title}`,
+          body: `Dates are live (${datePreview}) and registrations are now open! Tap to participate.`,
+          url: `/events/${event.id}`,
+          tag: `event-reminder-${event.id}`,
+          actions: [{ action: "open", title: "Participate Now" }],
+        });
+      })
+    );
+  }
+
+  static async subscribeReminder(eventId: number, userId: number) {
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error("Event not found");
+
+    if (event.created_by === userId) {
+      throw new Error("Organizers do not need a reminder for their own event.");
+    }
+
+    await prisma.eventReminder.upsert({
+      where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+      create: { event_id: eventId, user_id: userId, notified_at: null },
+      update: { notified_at: null },
+    });
+
+    return { has_reminder: true };
+  }
+
+  static async unsubscribeReminder(eventId: number, userId: number) {
+    try {
+      await prisma.eventReminder.delete({
+        where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+      });
+    } catch {
+      // Ignore if not found
+    }
+    return { has_reminder: false };
   }
 
   // 5. DELETE EVENT

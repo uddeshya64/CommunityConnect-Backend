@@ -35,17 +35,27 @@ export class CheckoutService {
       console.error(`[PUSH_ERROR] Failed to send registration push for ${registrationId}:`, err.message);
     }
   }
-// ==========================================
-  // 1. TEAM REGISTRATION FLOW (UPDATED)
-  // ==========================================
-  static async initializeTeamRegistration(userId: number, eventId: number, teamName: string, members?: Array<{ email: string; role?: string }>) {
-    const event = await prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) throw new Error("Event not found");
+  private static async assertRegistrationOpenAndAllowed(event: any, userId: number) {
+    if (!event.start_date || !event.end_date) {
+      throw new Error("Event dates have not been announced yet. Participation is unavailable until dates are published.");
+    }
+
+    if (event.is_registration_open === false) {
+      throw new Error("Registrations are currently closed by the organizer.");
+    }
+
+    const now = new Date();
+    if (now > new Date(event.end_date)) {
+      throw new Error("This event has already concluded. Registration is closed.");
+    }
+    if (now >= new Date(event.start_date)) {
+      throw new Error("This event has already started. Registration is closed.");
+    }
 
     // Capacity Check
     if (event.capacity > 0) {
       const confirmedCount = await prisma.registration.count({
-        where: { event_id: eventId, status: 'confirmed' }
+        where: { event_id: event.id, status: 'confirmed' }
       });
       if (confirmedCount >= event.capacity) {
         throw new Error("This event has reached its maximum participation capacity.");
@@ -57,11 +67,21 @@ export class CheckoutService {
       throw new Error("As the organizer of this event, you cannot register as an attendee.");
     }
     const staffRole = await prisma.eventUserRole.findUnique({
-      where: { event_id_user_id: { event_id: eventId, user_id: userId } }
+      where: { event_id_user_id: { event_id: event.id, user_id: userId } }
     });
     if (staffRole) {
       throw new Error("As a staff member of this event, you cannot register as an attendee.");
     }
+  }
+
+// ==========================================
+  // 1. TEAM REGISTRATION FLOW (UPDATED)
+  // ==========================================
+  static async initializeTeamRegistration(userId: number, eventId: number, teamName: string, members?: Array<{ email: string; role?: string }>) {
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error("Event not found");
+
+    await CheckoutService.assertRegistrationOpenAndAllowed(event, userId);
 
     const fee = Number(event.registration_fee);
     const isFree = fee === 0;
@@ -234,26 +254,7 @@ export class CheckoutService {
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error("Event not found");
 
-    // Capacity Check
-    if (event.capacity > 0) {
-      const confirmedCount = await prisma.registration.count({
-        where: { event_id: eventId, status: 'confirmed' }
-      });
-      if (confirmedCount >= event.capacity) {
-        throw new Error("This event has reached its maximum participation capacity.");
-      }
-    }
-
-    // Organizers and staff members cannot register as attendees in their own event
-    if (event.created_by === userId) {
-      throw new Error("As the organizer of this event, you cannot register as an attendee.");
-    }
-    const staffRole = await prisma.eventUserRole.findUnique({
-      where: { event_id_user_id: { event_id: eventId, user_id: userId } }
-    });
-    if (staffRole) {
-      throw new Error("As a staff member of this event, you cannot register as an attendee.");
-    }
+    await CheckoutService.assertRegistrationOpenAndAllowed(event, userId);
 
     if (event.registration_type !== 'individual' && event.min_team_size > 1) {
       throw new Error("This event requires you to register as a team.");

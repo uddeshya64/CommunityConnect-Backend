@@ -61,6 +61,7 @@ model User {
   announcement_reactions AnnouncementReaction[]
   quiz_responses         QuizResponse[]
   quiz_leaderboards      QuizLeaderboard[]
+  event_reminders        EventReminder[]
 
   @@map("users")
 }
@@ -88,8 +89,9 @@ model Event {
   mode               EventMode
   banner_url         String?
   logo_url           String?
-  start_date         DateTime
-  end_date           DateTime
+  start_date         DateTime?
+  end_date           DateTime?
+  is_registration_open Boolean             @default(true)
   registration_type  String
   registration_fee   Decimal
   max_team_size      Int
@@ -118,8 +120,22 @@ model Event {
   saved_by           SavedEvent[]
   staff_tasks        EventStaffTask[]
   quizzes            Quiz[]
+  reminders          EventReminder[]
 
   @@map("events")
+}
+
+model EventReminder {
+  id          Int       @id @default(autoincrement())
+  event_id    Int
+  user_id     Int
+  created_at  DateTime  @default(now())
+  notified_at DateTime?
+  event       Event     @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, user_id])
+  @@map("event_reminders")
 }
 
 model EventUserRole {

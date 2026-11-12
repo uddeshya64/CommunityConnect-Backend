@@ -20,6 +20,29 @@ const CustomFieldDefinition = z.object({
   options: z.array(z.string()).optional(),
 });
 
+const optionalDateField = z.preprocess(
+  (val) => {
+    if (val === undefined) return undefined;
+    if (val === null || (typeof val === "string" && val.trim() === "")) return null;
+    return val;
+  },
+  z.coerce.date().nullable().optional()
+);
+
+const optionalBooleanField = z.preprocess(
+  (val) => {
+    if (val === undefined) return undefined;
+    if (typeof val === "boolean") return val;
+    if (typeof val === "string") {
+      const normalized = val.trim().toLowerCase();
+      if (normalized === "true" || normalized === "1") return true;
+      if (normalized === "false" || normalized === "0") return false;
+    }
+    return val;
+  },
+  z.boolean().optional()
+);
+
 // Base Event Object
 const EventBaseObject = z.object({
   title: z
@@ -38,17 +61,30 @@ const EventBaseObject = z.object({
 
   mode: z.nativeEnum(EventMode),
 
-  // Convert FormData string values automatically
-  start_date: z.coerce.date(),
-  end_date: z.coerce.date(),
+  // Optional dates: leave blank/null to display "Coming Soon" until announced
+  start_date: optionalDateField,
+  end_date: optionalDateField,
+
+  // Organizer toggle for allowing or pausing registrations
+  is_registration_open: optionalBooleanField,
 
   registration_type: z.string(),
 
-  // FIX: FormData sends these as strings
-  registration_fee: z.coerce
-    .number()
-    .min(0, "Registration fee cannot be negative")
-    .max(100000, "Registration fee cannot exceed ₹100,000"),
+  // FIX: FormData sends these as strings; empty/null/omitted defaults cleanly to 0 (Free)
+  registration_fee: z
+    .preprocess(
+      (val) =>
+        val === undefined
+          ? undefined
+          : val === null || (typeof val === "string" && val.trim() === "")
+            ? 0
+            : val,
+      z.coerce
+        .number()
+        .min(0, "Registration fee cannot be negative")
+        .max(100000, "Registration fee cannot exceed ₹100,000")
+    )
+    .optional(),
 
   max_team_size: z.coerce
     .number()
@@ -96,7 +132,18 @@ const EventBaseObject = z.object({
 
 // CREATE EVENT VALIDATION
 export const CreateEventSchema = EventBaseObject.refine(
-  (data) => data.start_date < data.end_date,
+  (data) => !(Boolean(data.start_date) !== Boolean(data.end_date)),
+  {
+    message: "Please provide both start date and end date, or leave both blank for Coming Soon",
+    path: ["end_date"],
+  }
+).refine(
+  (data) => {
+    if (data.start_date && data.end_date) {
+      return data.start_date < data.end_date;
+    }
+    return true;
+  },
   {
     message: "End date must be after start date",
     path: ["end_date"],

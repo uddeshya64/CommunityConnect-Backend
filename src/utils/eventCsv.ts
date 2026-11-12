@@ -29,8 +29,8 @@ import type { EventDraftPatch } from "./eventDraft";
 export type EventCsvRecord = Partial<
   Omit<EventDraftPatch, "start_date" | "end_date">
 > & {
-  start_date?: string | Date | number;
-  end_date?: string | Date | number;
+  start_date?: string | Date | number | null;
+  end_date?: string | Date | number | null;
   /** Informational only: `events.id` for an existing event. */
   event_id?: unknown;
 };

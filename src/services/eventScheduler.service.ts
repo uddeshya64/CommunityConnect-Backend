@@ -60,6 +60,7 @@ export class EventSchedulerService {
       });
 
       for (const event of upcomingEvents) {
+        if (!event.start_date) continue;
         // Check if 24h reminder was already dispatched using custom_fields
         const customFields = (event.custom_fields as Record<string, any>) || {};
         if (customFields.reminder_24h_sent) {
