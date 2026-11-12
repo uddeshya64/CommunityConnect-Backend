@@ -12,10 +12,10 @@ export class EventService {
   // Post event Banner
 
   static async uploadBanner(
-  eventId: number,
-  userId: number,
-  file: Express.Multer.File
-) {
+    eventId: number,
+    userId: number,
+    file: Express.Multer.File
+  ) {
     // Check if event exists
     const event = await prisma.event.findUnique({
       where: {
@@ -27,11 +27,22 @@ export class EventService {
       throw new Error("Event not found");
     }
 
-    // Check event ownership
+    // Check event ownership or MANAGE_EVENT permission
     if (event.created_by !== Number(userId)) {
-      throw new Error(
-        "You are not authorized to update this event"
-      );
+      const staffRole = await prisma.eventUserRole.findUnique({
+        where: { event_id_user_id: { event_id: eventId, user_id: Number(userId) } },
+        include: { role: true },
+      });
+      const rolePerms = (staffRole?.role?.permissions as string[]) || [];
+      const overridePerms = (staffRole?.permissions_override as string[]) || [];
+      const canManage =
+        rolePerms.includes(EVENT_PERMISSIONS.MANAGE_EVENT) ||
+        overridePerms.includes(EVENT_PERMISSIONS.MANAGE_EVENT);
+      if (!canManage) {
+        throw new Error(
+          "You are not authorized to update this event"
+        );
+      }
     }
 
     // Create unique file name
@@ -101,8 +112,8 @@ export class EventService {
         ...(registration_form_schema
           ? { registration_form_schema }
           : custom_fields?.registration_form_schema
-          ? { registration_form_schema: custom_fields.registration_form_schema }
-          : {}),
+            ? { registration_form_schema: custom_fields.registration_form_schema }
+            : {}),
       };
 
       // Find or create the event type (case-insensitive)
@@ -130,7 +141,7 @@ export class EventService {
           title, description,
           type_id: eventType.id,
           mode,
-          banner_url: banner_url ?? undefined,
+          banner_url: banner_url && String(banner_url).trim() ? String(banner_url).trim() : undefined,
           logo_url: logo_url ?? undefined,
           start_date: start_date ? (start_date instanceof Date ? start_date : new Date(start_date)) : null,
           end_date: end_date ? (end_date instanceof Date ? end_date : new Date(end_date)) : null,
@@ -419,8 +430,19 @@ export class EventService {
       if (!hasManagePermission) throw new Error("Unauthorized: You lack the MANAGE_EVENT permission");
     }
 
-    const { type, ...updateData } = data;
+    const { type, remove_banner, ...updateData } = data;
     const finalUpdateData: any = { ...updateData };
+
+    if (
+      remove_banner === true ||
+      remove_banner === "true" ||
+      finalUpdateData.banner_url === "" ||
+      finalUpdateData.banner_url === null
+    ) {
+      finalUpdateData.banner_url = null;
+    } else if (typeof finalUpdateData.banner_url === "string") {
+      finalUpdateData.banner_url = finalUpdateData.banner_url.trim();
+    }
 
     const effectiveStartDate =
       finalUpdateData.start_date !== undefined ? finalUpdateData.start_date : event.start_date;
@@ -509,10 +531,10 @@ export class EventService {
 
     const datePreview = event.start_date
       ? new Date(event.start_date).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
       : "Updated Schedule";
 
     await Promise.allSettled(
