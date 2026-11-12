@@ -100,10 +100,18 @@ const EventBaseObject = z.object({
     .nonnegative("Capacity cannot be negative")
     .default(0),
 
-  banner_url: z
-    .string()
-    .url()
-    .optional(),
+  banner_url: z.preprocess(
+    (val) => {
+      if (typeof val === "string") {
+        const trimmed = val.trim();
+        return trimmed === "" ? undefined : trimmed;
+      }
+      return val === null ? undefined : val;
+    },
+    z.string().url("Please enter a valid banner URL").optional()
+  ),
+
+  remove_banner: z.union([z.boolean(), z.string()]).optional(),
 
   logo_url: z
     .string()
@@ -152,20 +160,29 @@ export const CreateEventSchema = EventBaseObject.refine(
 
 
 // UPDATE EVENT VALIDATION
-export const UpdateEventSchema = EventBaseObject.partial().refine(
-  (data) => {
-    // Validate dates only if both are provided
-    if (data.start_date && data.end_date) {
-      return data.start_date < data.end_date;
-    }
+export const UpdateEventSchema = EventBaseObject.partial()
+  .extend({
+    banner_url: z
+      .preprocess(
+        (val) => (typeof val === "string" ? val.trim() : val),
+        z.union([z.string().url("Please enter a valid banner URL"), z.literal(""), z.null()])
+      )
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      // Validate dates only if both are provided
+      if (data.start_date && data.end_date) {
+        return data.start_date < data.end_date;
+      }
 
-    return true;
-  },
-  {
-    message: "End date must be after start date",
-    path: ["end_date"],
-  }
-);
+      return true;
+    },
+    {
+      message: "End date must be after start date",
+      path: ["end_date"],
+    }
+  );
 
 // EVENT TIMELINE (AGENDA) VALIDATION
 export const BaseTimelineSchema = z.object({
